@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BotPulse — Enterprise Cybersecurity Design System & SOC Interface</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-void: #07080A;
+      --bg-surface-0: #0B0D12;
+      --bg-surface-1: #11151D;
+      --bg-surface-2: #161B26;
+      --bg-surface-3: #1E2534;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.12);
+      --border-prominent: rgba(255, 255, 255, 0.22);
+      --border-focus: #00F2FE;
+
+      --pulse-cyan: #00F2FE;
+      --pulse-blue: #2563EB;
+      --pulse-emerald: #10B981;
+      --pulse-amber: #F59E0B;
+      --pulse-orange: #F97316;
+      --pulse-crimson: #EF4444;
+      --pulse-violet: #8B5CF6;
+
+      --text-primary: #F8FAFC;
+      --text-secondary: #94A3B8;
+      --text-tertiary: #64748B;
+      --text-disabled: #334155;
+
+      --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-void);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* Top Shell Navigation */
+    header.botpulse-header {
+      height: 52px;
+      background: var(--bg-surface-0);
+      border-bottom: 1px solid var(--border-default);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #00F2FE 0%, #2563EB 100%);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.35);
+    }
+
+    .brand-logo svg {
+      width: 16px;
+      height: 16px;
+      stroke: #07080A;
+      stroke-width: 2.5;
+    }
+
+    .brand-name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .brand-badge {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      padding: 1px 5px;
+      background: rgba(0, 242, 254, 0.12);
+      color: var(--pulse-cyan);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-surface-1);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .nav-tab-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-tab-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .nav-tab-btn.active {
+      color: #FFF;
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border-default);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    .telemetry-status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--bg-surface-1);
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .beacon-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--pulse-emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--pulse-emerald);
+      animation: beacon-pulse 2s infinite ease-in-out;
+    }
+
+    @keyframes beacon-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Main Container */
+    main.main-viewport {
+      max-width: 1540px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .tab-content-panel {
+      display: none;
+    }
+
+    .tab-content-panel.active {
+      display: block;
+      animation: fadeIn 0.2s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section Cards */
+    .section-card {
+      background: var(--bg-surface-0);
+      border: 1px solid var(--border-default);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .section-card-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .section-card-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+
+    /* Color Grid */
+    .color-swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 12px;
+    }
+
+    .color-swatch-card {
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .color-swatch-card:hover {
+      border-color: var(--border-prominent);
+      transform: translateY(-2px);
+    }
+
+    .swatch-color-box {
+      height: 64px;
+      width: 100%;
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      padding: 8px;
+    }
+
+    .swatch-color-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      background: rgba(0,0,0,0.6);
+      padding: 2px 6px;
+      border-radius: 4px;
+      backdrop-filter: blur(4px);
+    }
+
+    .swatch-meta {
+      padding: 10px 12px;
+    }
+
+    .swatch-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .swatch-role {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    /* Typography Specimen */
+    .type-specimen-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      align-items: center;
+    }
+
+    .type-meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    /* Button Tokens */
+    .button-group-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #00F2FE 0%, #00B4D8 100%);
+      color: #07080A;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 0 14px rgba(0, 242, 254, 0.3);
+      transition: all 0.15s ease;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 22px rgba(0, 242, 254, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-surface-2);
+      color: var(--text-primary);
+      font-weight: 500;
+      font-size: 12px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border-default);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-surface-3);
+      border-color: var(--border-prominent);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #F87171;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+      box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+    }
+
+    /* Severity Badges */
+    .severity-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .badge-critical {
+      background: rgba(239, 68, 68, 0.15);
+      color: #EF4444;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+
+    .badge-high {
+      background: rgba(249, 115, 22, 0.15);
+      color: #F97316;
+      border: 1px solid rgba(249, 115, 22, 0.4);
+    }
+
+    .badge-medium {
+      background: rgba(245, 158, 11, 0.15);
+      color: #F59E0B;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    .badge-low {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60A5FA;
+      border: 1px solid rgba(59, 130, 246, 0.4);
+    }
+
+    .badge-safe {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10B981;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    /* SecOps Interactive Triage Workspace */
+    .soc-workspace {
+      display: grid;
+      grid-template-columns: 340px 1fr 380px;
+      gap: 16px;
+      height: 720px;
+      background: var(--bg-surface-0);
+      border: 1px solid var(--border-default);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    /* Column 1: Stream List */
+    .soc-stream-pane {
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-surface-0);
+    }
+
+    .pane-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    .stream-item-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .incident-item {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .incident-item:hover {
+      background: var(--bg-surface-1);
+    }
+
+    .incident-item.active {
+      background: var(--bg-surface-2);
+      border-left: 3px solid var(--pulse-cyan);
+    }
+
+    .incident-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 6px;
+      margin-bottom: 4px;
+    }
+
+    .incident-meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Column 2: Attack Path Topology */
+    .soc-canvas-pane {
+      display: flex;
+      flex-direction: column;
+      background: #080A0E;
+      position: relative;
+    }
+
+    .canvas-toolbar {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-surface-0);
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+
+    .graph-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-image: 
+        radial-gradient(circle at 50% 50%, rgba(0, 242, 254, 0.03) 0%, transparent 60%),
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
+    }
+
+    /* Attack Path Graph Nodes */
+    .attack-chain-flow {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      z-index: 10;
+    }
+
+    .graph-node {
+      width: 130px;
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .graph-node:hover, .graph-node.selected {
+      border-color: var(--pulse-cyan);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .graph-node.compromised {
+      border-color: var(--pulse-crimson);
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
+    }
+
+    .node-icon-box {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 8px;
+      border-radius: 6px;
+      background: var(--bg-surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .node-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .node-sub {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+    }
+
+    .graph-connector {
+      width: 48px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--pulse-crimson) 0%, var(--pulse-amber) 100%);
+      position: relative;
+    }
+
+    .graph-connector::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: -3px;
+      width: 0;
+      height: 0;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-left: 6px solid var(--pulse-amber);
+    }
+
+    /* Column 3: Inspector Dock */
+    .soc-inspector-pane {
+      border-left: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-surface-0);
+      overflow-y: auto;
+    }
+
+    .inspector-content {
+      padding: 18px;
+      flex: 1;
+    }
+
+    .inspector-section-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+      margin-top: 16px;
+    }
+
+    .telemetry-kv-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .telemetry-kv-table td {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .telemetry-key {
+      color: var(--text-secondary);
+      width: 45%;
+    }
+
+    .telemetry-val {
+      color: var(--pulse-cyan);
+      text-align: right;
+    }
+
+    .raw-payload-box {
+      background: #050608;
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #A5B4FC;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 8px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+
+    .inspector-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    /* High Density Telemetry Log Table */
+    .data-table-container {
+      background: var(--bg-surface-0);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .table-toolbar {
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-surface-1);
+    }
+
+    .search-box-input {
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: #FFF;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      width: 280px;
+    }
+
+    .search-box-input:focus {
+      outline: none;
+      border-color: var(--pulse-cyan);
+    }
+
+    table.dense-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    table.dense-table th {
+      background: var(--bg-surface-1);
+      padding: 8px 14px;
+      text-align: left;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border-default);
+    }
+
+    table.dense-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    table.dense-table tr:hover td {
+      background: var(--bg-surface-2);
+      color: var(--text-primary);
+    }
+
+    /* KPI Stat Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: var(--bg-surface-0);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+    }
+
+    .kpi-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .kpi-value {
+      font-family: var(--font-mono);
+      font-size: 26px;
+      font-weight: 700;
+      color: #FFF;
+      margin-top: 4px;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .kpi-delta {
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .delta-up { color: var(--pulse-crimson); }
+    .delta-down { color: var(--pulse-emerald); }
+
+    /* Sparkline SVG */
+    .mini-sparkline {
+      width: 100%;
+      height: 32px;
+      margin-top: 10px;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-surface-2);
+      color: #FFF;
+      border: 1px solid var(--pulse-cyan);
+      box-shadow: 0 4px 20px rgba(0, 242, 254, 0.25);
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      display: none;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Global Header -->
+  <header class="botpulse-header">
+    <div class="brand-group">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L3 7V13C3 18.5 7 21.5 12 22C17 21.5 21 18.5 21 13V7L12 2Z"/>
+          <path d="M9 12L11 14L15 10"/>
+        </svg>
+      </div>
+      <div class="brand-name">
+        BotPulse
+        <span class="brand-badge">SecOps v2.4</span>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="header-nav">
+      <button class="nav-tab-btn active" onclick="switchTab('secops')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        SecOps Command Center
+      </button>
+      <button class="nav-tab-btn" onclick="switchTab('tokens')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+        Design Tokens & Palette
+      </button>
+      <button class="nav-tab-btn" onclick="switchTab('components')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        Component Library
+      </button>
+      <button class="nav-tab-btn" onclick="switchTab('telemetry')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Telemetry Log Stream
+      </button>
+    </div>
+
+    <!-- Live Status Telemetry Indicator -->
+    <div class="telemetry-status-pill">
+      <div class="beacon-dot"></div>
+      <span>GLOBAL INGRESS: 4.8M EPS · 12ms</span>
+    </div>
+  </header>
+
+  <!-- Viewport Content -->
+  <main class="main-viewport">
+
+    <!-- TAB 1: SECOPS COMMAND CENTER -->
+    <div id="tab-secops" class="tab-content-panel active">
+      <!-- KPI Stats -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Blocked Bot Ingress (24h)</div>
+          <div class="kpi-value">
+            14.8M
+            <span class="kpi-delta delta-up">+14.2%</span>
+          </div>
+          <svg class="mini-sparkline" viewBox="0 0 100 25" fill="none">
+            <path d="M0,20 Q20,15 40,18 T70,5 T100,2" stroke="#EF4444" stroke-width="2"/>
+            <path d="M0,20 Q20,15 40,18 T70,5 T100,2 L100,25 L0,25 Z" fill="rgba(239, 68, 68, 0.1)"/>
+          </svg>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Mean Time to Contain (MTTC)</div>
+          <div class="kpi-value">
+            380ms
+            <span class="kpi-delta delta-down">-62%</span>
+          </div>
+          <svg class="mini-sparkline" viewBox="0 0 100 25" fill="none">
+            <path d="M0,8 Q25,12 50,15 T80,22 T100,24" stroke="#10B981" stroke-width="2"/>
+            <path d="M0,8 Q25,12 50,15 T80,22 T100,24 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.1)"/>
+          </svg>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Credential Stuffing Velocity</div>
+          <div class="kpi-value">
+            42/sec
+            <span class="kpi-delta delta-up">+8%</span>
+          </div>
+          <svg class="mini-sparkline" viewBox="0 0 100 25" fill="none">
+            <path d="M0,15 Q30,8 60,18 T100,10" stroke="#F59E0B" stroke-width="2"/>
+            <path d="M0,15 Q30,8 60,18 T100,10 L100,25 L0,25 Z" fill="rgba(245, 158, 11, 0.1)"/>
+          </svg>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Verified Autonomous Mitigations</div>
+          <div class="kpi-value">
+            99.98%
+            <span class="kpi-delta delta-down">Stable</span>
+          </div>
+          <svg class="mini-sparkline" viewBox="0 0 100 25" fill="none">
+            <path d="M0,5 Q50,4 100,5" stroke="#00F2FE" stroke-width="2"/>
+            <path d="M0,5 Q50,4 100,5 L100,25 L0,25 Z" fill="rgba(0, 242, 254, 0.1)"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 3-Pane Incident Investigation Workspace -->
+      <div class="soc-workspace">
+        <!-- Left Incident Stream -->
+        <div class="soc-stream-pane">
+          <div class="pane-header">
+            <span>ACTIVE INCIDENTS (6)</span>
+            <span class="severity-badge badge-critical">LIVE</span>
+          </div>
+          <div class="stream-item-list">
+            <div class="incident-item active" onclick="selectIncident(this, 'BP-9402', 'Residential Proxy Credential Stuffing', 'CRITICAL 9.8', '194.26.29.112', '14s ago')">
+              <span class="severity-badge badge-critical">CRITICAL 9.8</span>
+              <div class="incident-title">Residential Proxy Credential Stuffing</div>
+              <div class="incident-meta">
+                <span>SRC: 194.26.29.112</span>
+                <span>14s ago</span>
+              </div>
+            </div>
+
+            <div class="incident-item" onclick="selectIncident(this, 'BP-9401', 'Anomalous Token Minting via Stolen Session', 'HIGH 8.4', '45.154.255.8', '2m ago')">
+              <span class="severity-badge badge-high">HIGH 8.4</span>
+              <div class="incident-title">Anomalous Token Minting via Stolen Session</div>
+              <div class="incident-meta">
+                <span>SRC: 45.154.255.8</span>
+                <span>2m ago</span>
+              </div>
+            </div>
+
+            <div class="incident-item" onclick="selectIncident(this, 'BP-9399', 'Distributed Layer 7 HTTP Flood', 'HIGH 7.9', 'AS13335 (Botnet)', '5m ago')">
+              <span class="severity-badge badge-high">HIGH 7.9</span>
+              <div class="incident-title">Distributed Layer 7 HTTP Flood</div>
+              <div class="incident-meta">
+                <span>SRC: 84 Nodes</span>
+                <span>5m ago</span>
+              </div>
+            </div>
+
+            <div class="incident-item" onclick="selectIncident(this, 'BP-9395', 'Suspicious GraphQL Introspection Probe', 'MEDIUM 6.1', '185.220.101.5', '12m ago')">
+              <span class="severity-badge badge-medium">MEDIUM 6.1</span>
+              <div class="incident-title">Suspicious GraphQL Introspection Probe</div>
+              <div class="incident-meta">
+                <span>SRC: Tor Exit Node</span>
+                <span>12m ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center Attack Path Topology -->
+        <div class="soc-canvas-pane">
+          <div class="canvas-toolbar">
+            <span>ATTACK PATH TOPOLOGY (DAG) · INCIDENT #<span id="topo-inc-id">BP-9402</span></span>
+            <span style="color: var(--pulse-cyan)">SIMULATED PLAYBACK: T+0.420s</span>
+          </div>
+          <div class="graph-viewport">
+            <div class="attack-chain-flow">
+              <!-- Attacker Node -->
+              <div class="graph-node compromised" onclick="inspectNode('Adversary Residential Pool', '194.26.29.112 (AS49981)', 'Automated bot puppeteer rotating 14,000 residential egress proxies.')">
+                <div class="node-icon-box" style="color: #EF4444">☠️</div>
+                <div class="node-title">Adversary Pool</div>
+                <div class="node-sub">194.26.29.x</div>
+              </div>
+
+              <div class="graph-connector"></div>
+
+              <!-- Edge Shield Node -->
+              <div class="graph-node" onclick="inspectNode('BotPulse Edge WAF', 'Cluster US-East-01', 'Autonomous rate-limiting and JA3/JA4 TLS fingerprinting layer.')">
+                <div class="node-icon-box" style="color: #00F2FE">🛡️</div>
+                <div class="node-title">Edge Shield</div>
+                <div class="node-sub">Rate Limiter</div>
+              </div>
+
+              <div class="graph-connector"></div>
+
+              <!-- Ingress API Gateway -->
+              <div class="graph-node compromised" onclick="inspectNode('API Gateway Endpoint', '/api/v1/auth/login', 'Target of distributed credential stuffing payload stream.')">
+                <div class="node-icon-box" style="color: #F59E0B">⚡</div>
+                <div class="node-title">API Gateway</div>
+                <div class="node-sub">/auth/login</div>
+              </div>
+
+              <div class="graph-connector"></div>
+
+              <!-- User IAM / DB -->
+              <div class="graph-node" onclick="inspectNode('Identity Vault (IAM)', 'PostgreSQL RDS Prod', 'Customer credential store. Zero unauthorized read breaches detected.')">
+                <div class="node-icon-box" style="color: #10B981">🔒</div>
+                <div class="node-title">Identity Vault</div>
+                <div class="node-sub">Secured</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Forensic Inspector Dock -->
+        <div class="soc-inspector-pane">
+          <div class="pane-header">
+            <span>FORENSIC TELEMETRY</span>
+            <span class="severity-badge badge-critical" id="inspector-badge">CRITICAL</span>
+          </div>
+          <div class="inspector-content">
+            <div class="incident-title" id="inspector-title" style="font-size: 14px;">Residential Proxy Credential Stuffing</div>
+            <div style="font-size: 11px; color: var(--text-secondary);" id="inspector-desc">
+              High-velocity distributed dictionary attack targeting enterprise employee accounts via rotating residential ISP blocks.
+            </div>
+
+            <div class="inspector-section-label">ATTACK METRICS</div>
+            <table class="telemetry-kv-table">
+              <tr>
+                <td class="telemetry-key">Source IP:</td>
+                <td class="telemetry-val" id="val-ip">194.26.29.112</td>
+              </tr>
+              <tr>
+                <td class="telemetry-key">ASN / ISP:</td>
+                <td class="telemetry-val" id="val-asn">AS49981 WorldStream</td>
+              </tr>
+              <tr>
+                <td class="telemetry-key">TLS JA4 Fingerprint:</td>
+                <td class="telemetry-val" id="val-ja4">t13d1516h2_8daaf6</td>
+              </tr>
+              <tr>
+                <td class="telemetry-key">MITRE ATT&CK:</td>
+                <td class="telemetry-val" style="color: #F87171">T1110.004</td>
+              </tr>
+              <tr>
+                <td class="telemetry-key">Bot Confidence:</td>
+                <td class="telemetry-val" style="color: #10B981">99.8% (Autonomous)</td>
+              </tr>
+            </table>
+
+            <div class="inspector-section-label">RAW HTTP INGRESS PAYLOAD</div>
+            <div class="raw-payload-box" id="raw-payload-box">POST /api/v1/auth/session HTTP/2
+Host: app.botpulse.io
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64)
+x-forwarded-for: 194.26.29.112
+x-botpulse-challenge: FAILED_BEHAVIORAL_JITTER</div>
+
+            <div class="inspector-actions">
+              <button class="btn-primary" onclick="triggerToast('Global Edge WAF Rule Deployed. AS49981 IP Blocked across 32 Edge PoPs.')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Deploy Global WAF Quarantine
+              </button>
+              <button class="btn-secondary" onclick="triggerToast('Revoked 42 active session tokens matching ASN signature.')">
+                Revoke Tainted User Sessions
+              </button>
+              <button class="btn-danger" onclick="triggerToast('Target API endpoint put into strict CAPTCHA step-up mode.')">
+                Enforce Strict Biometric Step-Up
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: DESIGN TOKENS & PALETTE -->
+    <div id="tab-tokens" class="tab-content-panel">
+      <div class="section-card">
+        <div class="section-card-title">
+          <span>BotPulse Telemetry & Brand Color System</span>
+          <span class="severity-badge badge-safe">WCAG 2.1 AAA COMPLIANT</span>
+        </div>
+        <div class="section-card-desc">Click any swatch to copy its CSS token definition to clipboard.</div>
+
+        <div class="color-swatch-grid">
+          <!-- Space Void -->
+          <div class="color-swatch-card" onclick="copyToken('--bg-space-void', '#07080A')">
+            <div class="swatch-color-box" style="background: #07080A;">
+              <span class="swatch-color-label">#07080A</span>
+            </div>
+            <div class="swatch-meta">
+              <div class="swatch-title">Space Void</div>
+              <div class="swatch-role">Deepest application canvas backdrop</div>
+            </div>
+          </div>
+
+          <!-- Surface 0 -->
+          <div class="color-swatch-card" onclick="copyToken('--bg-surface-0', '#0B0D12')">
+            <div class="swatch-color-box" style="background: #0B0D12;">
+              <span class="swatch-color-label">#0B0D12</span>
+            </div>
+            <div class="swatch-meta">
+              <div class="swatch-title">Surface Layer 0</div>
+              <div class="swatch-role">Primary cards, panels & sidebars</div>
+            </div>
+          </div>
+
+          <!-- Surface 1 -->
+          <div class="color-swatch-card" onclick="copyToken('--bg-surface-1', '#11151D')">
+            <div class="swatch-color-box" style="background: #11151D;">
+              <span class="swatch-color-label">#11151D</span>
+            </div>
+            <div class="swatch-meta">
+              <div class="swatch-title">Surface Layer 1</div>
+              <div class="swatch-role">Nested containers & table headers</div>
+            </div>
+          </div>
+
+          <!-- Pulse Cyan -->
+          <div class="color-swatch-card" onclick="copyToken('--pulse-cyan', '#00F2FE')">
+            <div class="swatch-color-box" style="background: #00F2FE;">
+              <span class="swatch-color-label" style="color: #07080A;">#00F2FE</span>
+            </div>
+            <div class="swatch-meta">
+              <div class="swatch-title">Pulse Cyan (Brand Primary)</div>
+              <div class="swatch-role">Live telemetry, active probes & buttons</div>
+            </div>
+          </div>
+
+          <!-- Critical Crimson -->
+          <div class="color-swatch-card" onclick="copyToken('--pulse-crimson', '#EF4444')">
+            <div class="swatch-color-box" style="background: #EF4444;">
+              <span class="swatch-color-label">#EF4444</span>
+            </div>
+            <div class="swatch-meta">
+              <div class="swatch-title">Critical Breach Red</div>
+              <div class="swatch-role">Active exploits & CVSS 9.0+ severity</div>
+            </div>
+          </div>
+
+          <!-- Kinetic Emerald -->
+          <div class="color-swatch-card" onclick="copyToken('--pulse-emerald', '#10B981')">
+            <div class="swatch-color-box" style="background: #10B981;">
+              <span class="swatch-color-label">#10B981</span>
+            </div>
+            <div class="swatch-meta">
+              <div class="swatch-title">Kinetic Emerald (Safe)</div>
+              <div class="swatch-role">Verified defenses & 100% SLA uptime</div>
+            </div>
+          </div>
+
+          <!-- Warning Amber -->
+          <div class="color-swatch-card" onclick="copyToken('--pulse-amber', '#F59E0B')">
+            <div class="swatch-color-box" style="background: #F59E0B;">
+              <span class="swatch-color-label">#F59E0B</span>
+            </div>
+            <div class="swatch-meta">
+              <div class="swatch-title">Warning Amber</div>
+              <div class="swatch-role">Anomalous spikes & rate threshold warnings</div>
+            </div>
+          </div>
+
+          <!-- Intel Violet -->
+          <div class="color-swatch-card" onclick="copyToken('--pulse-violet', '#8B5CF6')">
+            <div class="swatch-color-box" style="background: #8B5CF6;">
+              <span class="swatch-color-label">#8B5CF6</span>
+            </div>
+            <div class="swatch-meta">
+              <div class="swatch-title">AI Intel Violet</div>
+              <div class="swatch-role">Autonomous playbooks & bot classifications</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typography Hierarchy -->
+      <div class="section-card">
+        <div class="section-card-title">Typographic Scale & Pairing</div>
+        <div class="section-card-desc">Plus Jakarta Sans (UI Headings & Labels) + JetBrains Mono (Telemetry, Hashes & Logs)</div>
+
+        <div class="type-specimen-row">
+          <div class="type-meta">DISPLAY / 32px 700</div>
+          <div style="font-size: 32px; font-weight: 700; letter-spacing: -0.02em;">Autonomous Threat Elimination</div>
+        </div>
+
+        <div class="type-specimen-row">
+          <div class="type-meta">HEADING / 20px 600</div>
+          <div style="font-size: 20px; font-weight: 600;">Incident Triage & Forensic Topology</div>
+        </div>
+
+        <div class="type-specimen-row">
+          <div class="type-meta">BODY UI / 13px 400</div>
+          <div style="font-size: 13px; color: var(--text-secondary);">
+            BotPulse continuously analyzes edge ingress vectors, automatically mitigating zero-day DDoS and credential stuffing attacks within 400 milliseconds.
+          </div>
+        </div>
+
+        <div class="type-specimen-row">
+          <div class="type-meta">MONO TELEMETRY / 12px 500</div>
+          <div style="font-family: var(--font-mono); font-size: 12px; color: var(--pulse-cyan);">
+            SHA256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: COMPONENT LIBRARY -->
+    <div id="tab-components" class="tab-content-panel">
+      <div class="section-card">
+        <div class="section-card-title">Button Primitives & Action Triggers</div>
+        <div class="section-card-desc">Tactile states with functional optical bloom for critical defense workflows.</div>
+        <div class="button-group-row">
+          <button class="btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Primary Action
+          </button>
+          <button class="btn-secondary">Secondary Action</button>
+          <button class="btn-danger">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            Isolate Infrastructure
+          </button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-title">Severity Badges & CVSS Indicators</div>
+        <div class="section-card-desc">Standardized risk markers with distinct mathematical contrast.</div>
+        <div class="button-group-row">
+          <span class="severity-badge badge-critical">CRITICAL 9.8</span>
+          <span class="severity-badge badge-high">HIGH 8.4</span>
+          <span class="severity-badge badge-medium">MEDIUM 6.1</span>
+          <span class="severity-badge badge-low">LOW 3.2</span>
+          <span class="severity-badge badge-safe">SAFE 0.0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: TELEMETRY LOG STREAM -->
+    <div id="tab-telemetry" class="tab-content-panel">
+      <div class="data-table-container">
+        <div class="table-toolbar">
+          <input type="text" class="search-box-input" placeholder="Filter by IP, CVE, ASN or Status..." onkeyup="filterTable(this)">
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary);">
+            STREAMING: 1,420 EVENTS / SEC
+          </div>
+        </div>
+        <table class="dense-table" id="telemetry-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Severity</th>
+              <th>Attack Vector</th>
+              <th>Client IP</th>
+              <th>Target Path</th>
+              <th>Autonomous Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>08:58:14.210</td>
+              <td><span class="severity-badge badge-critical">CRIT 9.8</span></td>
+              <td style="color: #FFF;">Credential Stuffing</td>
+              <td>194.26.29.112</td>
+              <td>/api/v1/auth/login</td>
+              <td style="color: var(--pulse-emerald);">BLOCKED · WAF-403</td>
+            </tr>
+            <tr>
+              <td>08:58:13.980</td>
+              <td><span class="severity-badge badge-high">HIGH 8.4</span></td>
+              <td style="color: #FFF;">Token Minting Replay</td>
+              <td>45.154.255.8</td>
+              <td>/oauth/token</td>
+              <td style="color: var(--pulse-emerald);">SESSION_REVOKED</td>
+            </tr>
+            <tr>
+              <td>08:58:12.650</td>
+              <td><span class="severity-badge badge-high">HIGH 7.9</span></td>
+              <td style="color: #FFF;">Layer 7 Slowloris</td>
+              <td>185.190.140.22</td>
+              <td>/graphql</td>
+              <td style="color: var(--pulse-emerald);">RATE_LIMITED_429</td>
+            </tr>
+            <tr>
+              <td>08:58:11.120</td>
+              <td><span class="severity-badge badge-medium">MED 6.1</span></td>
+              <td style="color: #FFF;">Directory Traversal</td>
+              <td>103.21.244.0</td>
+              <td>/etc/passwd</td>
+              <td style="color: var(--pulse-emerald);">DROPPED_EDGE</td>
+            </tr>
+            <tr>
+              <td>08:58:09.430</td>
+              <td><span class="severity-badge badge-safe">SAFE 0.0</span></td>
+              <td style="color: #FFF;">Legitimate Enterprise SSO</td>
+              <td>12.180.20.1</td>
+              <td>/sso/saml/callback</td>
+              <td style="color: var(--text-tertiary);">PASSED_200</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Interactive Toast -->
+  <div id="toast"></div>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+      
+      const targetPanel = document.getElementById('tab-' + tabId);
+      if (targetPanel) targetPanel.classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
+
+    function selectIncident(elem, id, title, severity, src, time) {
+      document.querySelectorAll('.incident-item').forEach(i => i.classList.remove('active'));
+      elem.classList.add('active');
+
+      document.getElementById('topo-inc-id').innerText = id;
+      document.getElementById('inspector-title').innerText = title;
+      document.getElementById('val-ip').innerText = src;
+      document.getElementById('inspector-badge').innerText = severity;
+    }
+
+    function inspectNode(title, sub, desc) {
+      document.getElementById('inspector-title').innerText = title;
+      document.getElementById('inspector-desc').innerText = desc;
+      triggerToast('Inspecting topology node: ' + title);
+    }
+
+    function copyToken(tokenName, hexVal) {
+      navigator.clipboard.writeText(tokenName + ': ' + hexVal + ';');
+      triggerToast('Copied ' + tokenName + ' (' + hexVal + ')');
+    }
+
+    function triggerToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 2400);
+    }
+
+    function filterTable(input) {
+      const filter = input.value.toUpperCase();
+      const rows = document.querySelectorAll('#telemetry-table tbody tr');
+      rows.forEach(r => {
+        r.style.display = r.innerText.toUpperCase().includes(filter) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>
