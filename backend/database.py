@@ -44,9 +44,17 @@ class DatabaseManager:
 
     def _init_connection(self):
         """Attempts connection to MongoDB; falls back to SQLite if unavailable."""
+        is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+        if is_serverless and settings.MONGODB_URI == "mongodb://localhost:27017":
+            # Skip MongoDB entirely on serverless when using default localhost URI
+            logger.info("Serverless environment detected with default MongoDB URI. Using SQLite directly.")
+            self.is_mongodb = False
+            self._init_sqlite()
+            return
         try:
             import pymongo
-            client = pymongo.MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=2000)
+            timeout = 500 if is_serverless else 2000
+            client = pymongo.MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=timeout)
             # Trigger server selection
             client.admin.command('ping')
             self.mongo_client = client
