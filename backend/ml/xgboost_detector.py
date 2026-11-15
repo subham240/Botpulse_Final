@@ -2,8 +2,15 @@ import os
 import time
 import logging
 from typing import Dict, Any, List
-import pandas as pd
-import joblib
+
+try:
+    import pandas as pd
+    import joblib
+    HAS_ML = True
+except ImportError:
+    HAS_ML = False
+    pd = None
+    joblib = None
 
 from backend.config import settings
 from backend.ml.feature_extractor import COMMON_FEATURES
@@ -26,6 +33,10 @@ class XGBoostDetector:
         self._load_model()
 
     def _load_model(self):
+        if not HAS_ML:
+            logger.info("ML runtime libraries (pandas/joblib) not present. Operating with rule-based screening.")
+            self.is_ready = False
+            return
         try:
             if os.path.exists(self.model_path) and os.path.exists(self.preprocessor_path):
                 self.model = joblib.load(self.model_path)
