@@ -22,15 +22,31 @@ class DatabaseManager:
         self.is_mongodb: bool = False
         self.mongo_client = None
         self.mongo_db = None
-        self.sqlite_path: str = os.path.join(settings.DATA_DIR, "botpulse.db")
-        os.makedirs(settings.DATA_DIR, exist_ok=True)
+        
+        is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+        if is_serverless:
+            self.sqlite_path: str = "/tmp/botpulse.db"
+            orig_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "botpulse.db")
+            if os.path.exists(orig_db) and not os.path.exists(self.sqlite_path):
+                try:
+                    import shutil
+                    shutil.copy2(orig_db, self.sqlite_path)
+                except Exception as e:
+                    logger.warning("Could not copy initial sqlite DB to /tmp: %s", e)
+        else:
+            self.sqlite_path: str = os.path.join(settings.DATA_DIR, "botpulse.db")
+            try:
+                os.makedirs(settings.DATA_DIR, exist_ok=True)
+            except Exception:
+                pass
+
         self._init_connection()
 
     def _init_connection(self):
         """Attempts connection to MongoDB; falls back to SQLite if unavailable."""
         try:
             import pymongo
-            client = pymongo.MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=800)
+            client = pymongo.MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=2000)
             # Trigger server selection
             client.admin.command('ping')
             self.mongo_client = client

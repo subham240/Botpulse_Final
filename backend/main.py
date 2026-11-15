@@ -36,7 +36,8 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
     description="Three-Layer AI Bot Detection, Behavioral Telemetry & Autonomous Prevention Engine",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False
 )
 
 # Configure CORS for dashboard and protected websites
@@ -67,6 +68,19 @@ def serve_botpulse_sdk():
             content = f.read()
         return Response(content=content, media_type="application/javascript")
     return Response(content="// SDK not found", status_code=404)
+
+@app.get("/")
+@app.get("/api")
+@app.get("/api/v1")
+def api_root():
+    """Root endpoint for Vercel and API discovery."""
+    return {
+        "status": "online",
+        "service": settings.PROJECT_NAME,
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/api/v1/health"
+    }
 
 @app.get("/health")
 @app.get("/api/v1/health")

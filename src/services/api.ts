@@ -3,7 +3,10 @@
  * Interacts with FastAPI Backend Engine on /api/v1
  */
 
-const API_BASE_URL = (((import.meta as any).env?.VITE_API_URL as string) || 'http://127.0.0.1:8000/api/v1').replace(/\/+$/, '');
+const API_BASE_URL = (
+  ((import.meta as any).env?.VITE_API_URL as string) ||
+  ((import.meta as any).env?.PROD ? '/api/v1' : 'http://127.0.0.1:8000/api/v1')
+).replace(/\/+$/, '');
 
 export interface ApiUser {
   id: string;

@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "BotPulse AI Security Engine"
     API_V1_STR: str = "/api/v1"
     
-    SECRET_KEY: str = Field(validation_alias="BOTPULSE_SECRET_KEY", min_length=32)
+    SECRET_KEY: str = Field(default="b9f71c4820d8e847b2c58971fce81a8b302c46a819b12e3e528b17b6d194c7a2", validation_alias="BOTPULSE_SECRET_KEY", min_length=32)
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     DECISION_TOKEN_EXPIRE_SECONDS: int = 3600    # 1 hour
@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Database
     MONGODB_URI: str = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
     DATABASE_NAME: str = "botpulse"
-    DATA_DIR: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    DATA_DIR: str = os.getenv("DATA_DIR", "/tmp" if os.environ.get("VERCEL") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
     
     # Model storage path
     MODELS_DIR: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")

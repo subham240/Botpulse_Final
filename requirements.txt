@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+pymongo
+bcrypt
+PyJWT
+pandas
+joblib
+scikit-learn
+xgboost
+python-multipart
