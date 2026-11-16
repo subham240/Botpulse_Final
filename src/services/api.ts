@@ -3,10 +3,30 @@
  * Interacts with FastAPI Backend Engine on /api/v1
  */
 
-const API_BASE_URL = (
-  ((import.meta as any).env?.VITE_API_URL as string) ||
-  ((import.meta as any).env?.PROD ? '/api/v1' : 'http://127.0.0.1:8000/api/v1')
-).replace(/\/+$/, '');
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    // 1. Check if URL has ?api=https://... to quickly switch or set backend
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const paramUrl = params.get('api');
+      if (paramUrl) {
+        const clean = paramUrl.replace(/\/+$/, '');
+        localStorage.setItem('bp_api_url', clean);
+        return clean;
+      }
+    } catch {}
+    // 2. Check saved localStorage
+    const saved = localStorage.getItem('bp_api_url');
+    if (saved) {
+      return saved.replace(/\/+$/, '');
+    }
+  }
+  // 3. Environment variable or default
+  return (
+    ((import.meta as any).env?.VITE_API_URL as string) ||
+    ((import.meta as any).env?.PROD ? '/api/v1' : 'http://127.0.0.1:8000/api/v1')
+  ).replace(/\/+$/, '');
+}
 
 export interface ApiUser {
   id: string;
@@ -162,7 +182,7 @@ class ApiError extends Error {
 }
 
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = `${getApiBaseUrl()}${endpoint}`;
   const headers = new Headers(options.headers || {});
   
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -194,7 +214,9 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 }
 
 export const api = {
-  baseUrl: API_BASE_URL,
+  get baseUrl() {
+    return getApiBaseUrl();
+  },
 
   // Auth endpoints
   auth: {

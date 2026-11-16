@@ -40,13 +40,14 @@ app = FastAPI(
     redirect_slashes=False
 )
 
-# Configure CORS for dashboard and protected websites
+# Configure CORS for dashboard and protected websites (supports all origins, tunnels, and Vercel domains)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Mount Routes
