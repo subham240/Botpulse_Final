@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { Plug, Globe, Plus, CheckCircle2, Copy, Check, Terminal, ExternalLink, Activity, ShieldCheck } from 'lucide-react';
+import { getApiBaseUrl } from '../../services/api';
+import { Plug, Globe, Plus, CheckCircle2, Copy, Check, Terminal, ExternalLink, Activity, ShieldCheck, Sparkles } from 'lucide-react';
 
 export const IntegrationsPage: React.FC = () => {
   const { sites, addSite, showToast } = useApp();
@@ -59,26 +60,43 @@ export const IntegrationsPage: React.FC = () => {
               </span>
             </div>
 
-            <h3 className="text-lg font-bold text-white font-mono">
-              Elvara E-Commerce Platform (<a href="https://elvara-fashion.vercel.app/" target="_blank" rel="noreferrer" className="text-purple-300 hover:underline">elvara-fashion.vercel.app</a>)
+            <h3 className="text-lg font-bold text-white font-mono flex items-center gap-2">
+              <span>ÉLVARA Luxury Storefront</span>
+              <a
+                href={`https://elvara-fashion.vercel.app/?bp_api=${encodeURIComponent(getApiBaseUrl())}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 transition-colors"
+              >
+                <span>Launch Store & Stream Live</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </h3>
 
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Elvara is an independent modern e-commerce storefront demonstration monitored by BotPulse. BotPulse's behavioural tracking SDK operates asynchronously on Elvara, stopping inventory hoarding, coupon fuzzing, and cart sniping bots in real time.
+              ÉLVARA is an independent contemporary fashion storefront protected by BotPulse. BotPulse's behavioural tracking SDK operates asynchronously on ÉLVARA, transmitting mouse trajectories, scroll kinematics, and device telemetry to stop scraping, inventory hoarding, and automated bots in real time.
             </p>
 
             <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-slate-400 pt-2">
               <div>SDK: <strong className="text-white">botpulse-js v1.4.2</strong></div>
-              <div>Telemetry: <strong className="text-emerald-400">384,920 req/24h</strong></div>
-              <div>Threats Mitigated: <strong className="text-purple-300">14,820</strong></div>
+              <div>Connected Endpoint: <strong className="text-emerald-400">{getApiBaseUrl()}</strong></div>
             </div>
           </div>
 
-          <div className="p-4 rounded-xl bg-surface-0/80 border border-white/10 font-mono text-xs text-slate-300 shrink-0">
-            <div className="text-[10px] text-slate-400 uppercase mb-1">Active Sensor Snippet:</div>
-            <code className="text-pulse-cyan text-[11px] block">
-              &lt;script src="https://cdn.botpulse.io/v1/sensor.js" data-site-id="bp_live_89fe4a1" async&gt;&lt;/script&gt;
+          <div className="p-4 rounded-xl bg-surface-0/80 border border-white/10 font-mono text-xs text-slate-300 shrink-0 space-y-2">
+            <div className="text-[10px] text-slate-400 uppercase">Active Telemetry Integration:</div>
+            <code className="text-pulse-cyan text-[11px] block bg-black/40 p-2 rounded border border-white/5">
+              &lt;script src="{getApiBaseUrl().replace(/\/api\/v1\/?$/, '')}/botpulse.js"&gt;&lt;/script&gt;
             </code>
+            <a
+              href={`https://elvara-fashion.vercel.app/?bp_api=${encodeURIComponent(getApiBaseUrl())}`}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full mt-2 py-2 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 flex items-center justify-center gap-2 transition-all"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open Storefront (Live Tracking)</span>
+            </a>
           </div>
         </div>
       </div>

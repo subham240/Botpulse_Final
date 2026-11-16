@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
+import { getApiBaseUrl } from '../../services/api';
 import {
   LayoutDashboard,
   Radio,
@@ -19,7 +20,8 @@ import {
   Calendar,
   LogOut,
   Bell,
-  Play
+  Play,
+  ExternalLink
 } from 'lucide-react';
 
 interface PrimaryNavItem {
@@ -182,8 +184,20 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           </div>
         </div>
 
-        {/* Right Section: Test Beacon, Profile & Logout */}
+        {/* Right Section: ÉLVARA Store Link, Test Beacon, Profile & Logout */}
         <div className="flex items-center gap-3">
+          {/* Direct Link to Protected Storefront */}
+          <a
+            href={`https://elvara-fashion.vercel.app/?bp_api=${encodeURIComponent(getApiBaseUrl())}`}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-[11px] font-mono text-purple-300 transition-colors"
+            title="Open protected ÉLVARA Storefront with live telemetry"
+          >
+            <span>ÉLVARA Store</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+
           {/* Real-time Telemetry Simulator Dropdown */}
           <div className="relative hidden sm:block">
             <button

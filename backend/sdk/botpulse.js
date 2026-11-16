@@ -30,6 +30,25 @@
       return;
     }
     this.siteKey = config.siteKey;
+    
+    // Auto-detect dynamic endpoint from query parameter or localStorage
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        var params = new URLSearchParams(window.location.search);
+        var qp = params.get('bp_api') || params.get('api');
+        if (qp) {
+          var cleanQp = qp.replace(/\/+$/, '');
+          localStorage.setItem('bp_api_url', cleanQp);
+          this.endpoint = cleanQp;
+        } else {
+          var saved = localStorage.getItem('bp_api_url');
+          if (saved) {
+            this.endpoint = saved.replace(/\/+$/, '');
+          }
+        }
+      }
+    } catch (e) {}
+
     if (config.endpoint) this.endpoint = config.endpoint.replace(/\/+$/, '');
     if (config.enabled !== undefined) this.enabled = config.enabled;
     if (config.batchIntervalMs) this.batchIntervalMs = config.batchIntervalMs;
@@ -228,7 +247,8 @@
           });
         }
       }
-    }).catch(function() {
+    }).catch(function(err) {
+      console.warn('[BotPulse SDK] Telemetry delivery failed to ' + targetUrl, err);
       // Re-queue on connection failure
       self.eventQueue = eventsToSend.concat(self.eventQueue);
     });
