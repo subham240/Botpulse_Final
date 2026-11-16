@@ -33,9 +33,9 @@ export const LoginPage: React.FC = () => {
       navigate('/app/overview');
     } catch (err: any) {
       const msg = err.message || '';
-      if (msg.toLowerCase().includes('fetch') || msg.includes('NetworkError')) {
+      if (msg.toLowerCase().includes('fetch') || msg.includes('NetworkError') || err.status === 530) {
         localStorage.removeItem('bp_api_url');
-        setError('Connection reset to live backend proxy. Please click Sign In again.');
+        setError('Tunnel endpoint reset to active proxy. Please click Sign In again.');
       } else {
         setError(msg || 'Authentication failed. Please check your credentials.');
       }

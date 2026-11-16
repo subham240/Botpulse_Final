@@ -22,7 +22,10 @@ export function getApiBaseUrl(): string {
     const saved = localStorage.getItem('bp_api_url');
     if (saved && saved.trim() !== '') {
       // If saved is an old dead trycloudflare tunnel, purge it!
-      if (saved.includes('trycloudflare.com') && !saved.includes('refused-them-pharmacology-completion')) {
+      if (
+        saved.includes('belfast-estate-round-budapest') ||
+        saved.includes('refused-them-pharmacology-completion')
+      ) {
         localStorage.removeItem('bp_api_url');
       } else if (
         window.location.hostname !== 'localhost' &&
@@ -217,12 +220,18 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   });
 
   if (!res.ok) {
+    if (res.status === 530 && typeof window !== 'undefined') {
+      localStorage.removeItem('bp_api_url');
+    }
     let errMsg = `API request failed with status ${res.status}`;
     try {
       const errData = await res.json();
       errMsg = errData.detail || errData.message || errMsg;
     } catch {
       // Body not JSON
+    }
+    if (res.status === 530) {
+      errMsg = 'Cloudflare Tunnel unreachable (status 530). Stale endpoint reset — please retry.';
     }
     throw new ApiError(errMsg, res.status);
   }
