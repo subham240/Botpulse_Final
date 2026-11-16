@@ -4,7 +4,7 @@
  */
 
 export function getApiBaseUrl(): string {
-  const DEFAULT_TUNNEL_API = 'https://belfast-estate-round-budapest.trycloudflare.com/api/v1';
+  const DEFAULT_TUNNEL_API = 'https://ignored-belle-suspension-architectural.trycloudflare.com/api/v1';
 
   if (typeof window !== 'undefined') {
     // 1. Explicit query param ?api=... overrides everything
