@@ -15,15 +15,12 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      - name: Push to Hugging Face Space
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Hugging Face Auto-Sync
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          if [ -z "$HF_TOKEN" ]; then
-            echo "❌ ERROR: HF_TOKEN is missing."
-            echo "Please add your Hugging Face Write Token in: Settings -> Secrets and variables -> Actions -> Repository Secrets."
-            exit 1
-          fi
-          echo "Syncing repository to Hugging Face Space..."
-          git push --force https://subham240:$HF_TOKEN@huggingface.co/spaces/subham240/botpulse-api main:main
-          echo "✓ Successfully synced to Hugging Face Hub!"
+        run: python .github/sync_hf.py
