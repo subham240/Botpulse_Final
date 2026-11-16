@@ -98,10 +98,27 @@ class XGBoostDetector:
             reason_codes = []
             if features.get("MAX_BARRAGE", 0) > 8:
                 reason_codes.append("HIGH_FREQUENCY_BURST")
-            if features.get("STANDARD_DEVIATION", 0) < 0.05 and features.get("NUMBER_OF_REQUESTS", 0) > 4:
+            if features.get("STANDARD_DEVIATION", 0) < 0.05 and features.get("NUMBER_OF_REQUESTS", 0) > 3:
                 reason_codes.append("UNNATURAL_FIXED_CADENCE")
             if features.get("CONSECUTIVE", 0) > 0.85:
                 reason_codes.append("ZERO_CURVATURE_TRAJECTORY")
+            if features.get("IS_AUTOMATED_TOOL", 0) > 0.5:
+                reason_codes.append("HEADLESS_AUTOMATION_SIGNATURE")
+
+            # Correlate strong automation indicators with tabular probabilities
+            has_automation = (
+                "HEADLESS_AUTOMATION_SIGNATURE" in reason_codes
+                or ("ZERO_CURVATURE_TRAJECTORY" in reason_codes and "UNNATURAL_FIXED_CADENCE" in reason_codes)
+                or features.get("MAX_BARRAGE", 0) >= 10
+            )
+
+            if has_automation and prob_bot < 0.60:
+                prob_bot = 0.91
+                prob_human = 0.09
+                pred_class = 1
+                predicted_label = "automated_bot"
+                confidence = 0.91
+                requires_advanced = True
 
             return {
                 "layer": "xgboost",

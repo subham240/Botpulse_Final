@@ -48,7 +48,7 @@ interface AppContextType {
   sites: IntegrationSite[];
   addSite: (name: string, domain: string) => void;
   takeEnforcementAction: (sessionId: string, action: EnforcementDecision) => void;
-  sendTestEvent: (type?: 'human' | 'bot' | 'agent') => Promise<void>;
+  sendTestEvent: (type?: 'human' | 'bot' | 'agent' | 'gemini') => Promise<void>;
   resetToZeroState: () => void;
   toasts: ToastMessage[];
   showToast: (title: string, message: string, type?: ToastMessage['type']) => void;
@@ -296,21 +296,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (agentsRes.status === 'fulfilled' && agentsRes.value?.agents?.length > 0) {
-        const mappedAgents: AIAgentRecord[] = agentsRes.value.agents.map((a: any, idx: number) => ({
-          id: a.session_id || `agent-${idx}`,
-          name: a.reasons?.find((r: string) => r.includes('AI_AGENT_DETECTED'))?.split(':')[1]?.trim() || 'Perplexity AI Search Agent',
-          family: 'Perplexity / LLM Web Agent',
-          publisher: 'Perplexity AI',
-          declaredCategory: 'AI Researcher',
-          intent: 'Suspicious',
-          detectionModel: 'RAD-S1 Signature',
-          confidence: 96,
-          activeSessions: 1,
-          requestsLast24h: a.event_count || 4,
-          enforcementPolicy: (a.enforcement as EnforcementDecision) || 'verify',
-          lastActive: a.last_seen ? a.last_seen.slice(11, 19) : 'Just now',
-          description: 'Identified by declared crawler user-agent and sub-human page dwell pattern.',
-        }));
+        const mappedAgents: AIAgentRecord[] = agentsRes.value.agents.map((a: any, idx: number) => {
+          const reasonStr = (a.reasons || []).join(' ');
+          const isGemini = reasonStr.toLowerCase().includes('gemini') || (a.user_agent || '').toLowerCase().includes('gemini');
+          const isClaude = reasonStr.toLowerCase().includes('claude') || (a.user_agent || '').toLowerCase().includes('claude');
+          const isGpt = reasonStr.toLowerCase().includes('gpt') || (a.user_agent || '').toLowerCase().includes('gpt');
+
+          const rawName = a.reasons?.find((r: string) => r.includes('AI_AGENT_DETECTED'))?.split(':')[1]?.trim();
+          const name = isGemini ? 'Google Gemini Autonomous Agent' : (rawName || (isClaude ? 'Anthropic Claude Agent' : isGpt ? 'OpenAI GPTBot' : 'Autonomous AI Agent'));
+          const family = isGemini ? 'Google Gemini 1.5 / 2.0 Flash' : isClaude ? 'Anthropic Claude 3.7' : isGpt ? 'OpenAI Web Corpus' : 'Autonomous LLM Agent';
+          const publisher = isGemini ? 'Google DeepMind' : isClaude ? 'Anthropic, PBC' : isGpt ? 'OpenAI, LLC' : 'Verified AI Entity';
+          const intent = (isGemini || isClaude || isGpt) ? 'Legitimate' : 'Suspicious';
+          const detectionModel = isGemini ? 'RAD-S1 API Credential Attribution' : 'RAD-S1 Multi-Factor Fingerprint';
+          const description = isGemini
+            ? 'Autonomous multimodal web agent authenticated with Google Gemini API key credentials.'
+            : 'Identified by declared crawler user-agent and sub-human page dwell pattern.';
+
+          return {
+            id: a.session_id || `agent-${idx}`,
+            name,
+            family,
+            publisher,
+            declaredCategory: 'Autonomous Agent',
+            intent,
+            detectionModel,
+            confidence: 99,
+            activeSessions: 1,
+            requestsLast24h: a.event_count || 4,
+            enforcementPolicy: (a.enforcement as EnforcementDecision) || 'allow',
+            lastActive: a.last_seen ? a.last_seen.slice(11, 19) : 'Just now',
+            description,
+          };
+        });
         setBackendAgents(mappedAgents);
       }
     } catch (err) {
@@ -393,12 +410,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Policy Enacted', `Applied [${action.toUpperCase()}] to session ${sessionId}`, 'warning');
   };
 
-  const sendTestEvent = async (type: 'human' | 'bot' | 'agent' = 'human') => {
+  const sendTestEvent = async (type: 'human' | 'bot' | 'agent' | 'gemini' = 'human') => {
     // REAL BACKEND INGESTION FOR ALL SESSIONS
     try {
       const nowMs = Date.now();
       const sid = `sess_${type}_live_${nowMs.toString().slice(-6)}`;
       let userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+      let geminiApiKey: string | undefined = undefined;
       let eventsPayload = [];
 
       if (type === 'human') {
@@ -419,6 +437,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { event_type: 'mousemove', url: 'https://elvara.store/checkout', timestamp: nowMs - 20, sequence_num: 3, payload: { x: 200, y: 200 } },
           { event_type: 'click', url: 'https://elvara.store/checkout', timestamp: nowMs - 10, sequence_num: 4, payload: { x: 200, y: 200, target: 'button#pay' } },
         ];
+      } else if (type === 'gemini') {
+        // Google Gemini AI Autonomous Agent authenticated through its API Key
+        userAgent = 'Google-Gemini-Agent/1.0 (+https://deepmind.google/technologies/gemini/)';
+        geminiApiKey = 'AIzaSyA8B2c_GeminiProAutonomousAgent2026';
+        eventsPayload = [
+          { event_type: 'pageview', url: 'https://elvara.store/products', timestamp: nowMs - 120, sequence_num: 1, payload: { query: 'fall-collection', agent_intent: 'research' } },
+          { event_type: 'scroll', url: 'https://elvara.store/products', timestamp: nowMs - 60, sequence_num: 2, payload: { scrollY: 820 } },
+          { event_type: 'click', url: 'https://elvara.store/products/12', timestamp: nowMs, sequence_num: 3, payload: { target: 'div.product-card' } },
+        ];
       } else {
         // AI Autonomous Agent: declared crawler user agent, sub-human dwell
         userAgent = 'PerplexityBot/1.0 (+https://perplexity.ai/bot)';
@@ -429,13 +456,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ];
       }
 
-      const batch = {
+      const batch: any = {
         site_key: 'bp_pub_alvera_live_7c4f19e',
         session_id: sid,
         visitor_id: `vis_${type}_${nowMs.toString().slice(-4)}`,
         user_agent: userAgent,
         events: eventsPayload,
       };
+
+      if (geminiApiKey) {
+        batch.gemini_api_key = geminiApiKey;
+        batch.api_key = geminiApiKey;
+        batch.agent_family = 'gemini';
+      }
 
       const decision = await api.events.ingestBatch(batch);
 

@@ -68,7 +68,7 @@ export interface AIAgentRecord {
   publisher: string;
   declaredCategory: 'Search Bot' | 'Coding Agent' | 'AI Researcher' | 'Rogue Scraper' | 'Autonomous Agent';
   intent: 'Legitimate' | 'Suspicious' | 'Malicious';
-  detectionModel: 'RAD-S1 Signature' | 'Prompt Injection Fingerprint' | 'Header Correlation' | 'Behavioural Pattern';
+  detectionModel: 'RAD-S1 Signature' | 'Prompt Injection Fingerprint' | 'Header Correlation' | 'Behavioural Pattern' | 'RAD-S1 API Credential Attribution' | 'RAD-S1 Multi-Factor Fingerprint';
   confidence: number; // percentage
   activeSessions: number;
   requestsLast24h: number;

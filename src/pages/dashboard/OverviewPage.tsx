@@ -213,6 +213,14 @@ export const OverviewPage: React.FC = () => {
               >
                 + Test AI Agent
               </button>
+              <button
+                onClick={() => sendTestEvent('gemini')}
+                className="px-3 py-1.5 rounded-lg bg-[#18221D] hover:bg-[#1F2E27] text-purple-400 border border-purple-500/30 font-mono transition-colors flex items-center gap-1.5"
+                title="Simulates Google Gemini autonomous agent authenticated with its API key"
+              >
+                <span>✨</span>
+                <span>Test Gemini Agent</span>
+              </button>
             </div>
           </div>
         )}

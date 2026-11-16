@@ -17,6 +17,8 @@
     this.eventQueue = [];
     this.timer = null;
     this.resembleToken = null;
+    this.apiKey = null;
+    this.geminiApiKey = null;
     this.onDecisionCallback = null;
     this.lastMouseTime = 0;
     this.latestDecisionToken = null;
@@ -32,6 +34,8 @@
     if (config.enabled !== undefined) this.enabled = config.enabled;
     if (config.batchIntervalMs) this.batchIntervalMs = config.batchIntervalMs;
     if (config.batchSize) this.batchSize = config.batchSize;
+    if (config.apiKey) this.apiKey = config.apiKey;
+    if (config.geminiApiKey) this.geminiApiKey = config.geminiApiKey;
     if (config.onDecision) this.onDecisionCallback = config.onDecision;
 
     if (!this.enabled) return;
@@ -45,6 +49,14 @@
 
   BotPulseSDK.prototype.setResembleToken = function(token) {
     this.resembleToken = token;
+  };
+
+  BotPulseSDK.prototype.setApiKey = function(key) {
+    this.apiKey = key;
+  };
+
+  BotPulseSDK.prototype.setGeminiApiKey = function(key) {
+    this.geminiApiKey = key;
   };
 
   BotPulseSDK.prototype.getDecisionToken = function() {
@@ -181,6 +193,8 @@
       visitor_id: this.visitorId,
       user_agent: navigator.userAgent,
       resemble_token: this.resembleToken,
+      api_key: this.apiKey,
+      gemini_api_key: this.geminiApiKey,
       events: eventsToSend
     };
 

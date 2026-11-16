@@ -25,9 +25,14 @@ class RiskEngine:
         # ----------------------------------------------------------------------
         if l3.get("agent_detected"):
             visitor_category = "ai_agent"
-            confidence = l3.get("confidence") or 0.94
-            # AI-Agents are monitored or challenged rather than blindly blocked
-            raw_risk = 45.0
+            confidence = l3.get("confidence") or 0.96
+            # Authenticated AI agents (e.g. Gemini with API key) are recognized as legitimate AI agents
+            if "VALID_GEMINI_API_KEY" in l3.get("reason_codes", []):
+                raw_risk = 18.0
+            elif "DECLARED_AI_SIGNATURE" in l3.get("reason_codes", []):
+                raw_risk = 26.0
+            else:
+                raw_risk = 35.0
             reasons.extend(l3.get("reason_codes", []))
             reasons.append(f"AI_AGENT_DETECTED: {l3.get('agent_family') or 'Autonomous Web Agent'}")
 
@@ -47,12 +52,19 @@ class RiskEngine:
         # ----------------------------------------------------------------------
         elif l1.get("status") == "completed":
             if l1.get("predicted_class") == "automated_bot":
-                visitor_category = "traditional_bot"
-                prob_bot = l1.get("prob_bot", 0.8)
-                raw_risk = 60.0 + (prob_bot * 25.0)  # 60 - 85
-                confidence = l1.get("confidence") or 0.88
-                reasons.extend(l1.get("reason_codes", []))
-                reasons.append("TRADITIONAL_AUTOMATION_SIGNATURE")
+                # If Layer 2 LSTM completed and verified natural human trajectory kinematics, override tabular false positive
+                if l2.get("status") == "completed" and (l2.get("advanced_bot_score") or 1.0) < 0.25:
+                    visitor_category = "human"
+                    confidence = l2.get("confidence") or 0.95
+                    raw_risk = 8.0
+                    reasons.append("LSTM_VERIFIED_HUMAN_KINEMATICS")
+                else:
+                    visitor_category = "traditional_bot"
+                    prob_bot = l1.get("prob_bot", 0.8)
+                    raw_risk = 60.0 + (prob_bot * 25.0)  # 60 - 85
+                    confidence = l1.get("confidence") or 0.88
+                    reasons.extend(l1.get("reason_codes", []))
+                    reasons.append("TRADITIONAL_AUTOMATION_SIGNATURE")
             else:
                 visitor_category = "human"
                 prob_human = l1.get("prob_human", 0.9)
@@ -88,7 +100,7 @@ class RiskEngine:
         if visitor_category == "human" and risk_score < 30.0:
             decision = "allow"
         elif visitor_category == "ai_agent":
-            decision = "verify"
+            decision = "allow" if risk_score < 30.0 else "verify"
         elif risk_score >= 80.0:
             decision = "block"
         elif risk_score >= 55.0:

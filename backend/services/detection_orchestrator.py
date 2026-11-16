@@ -12,7 +12,7 @@ class DetectionOrchestrator:
     Executes conditional, staged inference:
     Layer 1: XGBoost tabular screening
     Layer 2: Bidirectional LSTM sequential behavioral analysis
-    Layer 3: RAD-S1 autonomous AI-agent fingerprinting
+    Layer 3: RAD-S1 autonomous AI-agent fingerprinting & credential attribution
     """
 
     def __init__(self):
@@ -27,6 +27,8 @@ class DetectionOrchestrator:
         session_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         session_metadata = session_metadata or {}
+        if user_agent and "user_agent" not in session_metadata:
+            session_metadata["user_agent"] = user_agent
         audit_trail = {
             "executed_layers": [],
             "skipped_layers": [],
@@ -44,18 +46,18 @@ class DetectionOrchestrator:
         self.registry.record_run("xgboost", l1_result.get("latency_ms", 1.8), l1_result.get("predicted_class") != "human")
 
         # ----------------------------------------------------------------------
-        # LAYER 2: LSTM Sequential Analysis (Conditional)
+        # LAYER 2: LSTM Sequential Analysis
         # Triggered when XGBoost indicates automation, ambiguous probability,
         # or when sufficient interaction sequence exists.
         # ----------------------------------------------------------------------
-        requires_l2 = l1_result.get("requires_advanced_analysis", False) or len(events) >= 12
+        requires_l2 = l1_result.get("requires_advanced_analysis", False) or len(events) >= 5
         l2_result = None
 
         if requires_l2:
             l2_result = self.registry.lstm.evaluate_sequence(events)
             audit_trail["executed_layers"].append("lstm")
-            is_l2_anomaly = (l2_result.get("advanced_bot_score") or 0.0) > 0.6
-            self.registry.record_run("lstm", l2_result.get("latency_ms", 4.5), is_l2_anomaly)
+            is_l2_anomaly = (l2_result.get("advanced_bot_score") or 0.0) >= 0.65
+            self.registry.record_run("lstm", l2_result.get("latency_ms", 3.5), is_l2_anomaly)
         else:
             audit_trail["skipped_layers"].append({
                 "layer": "lstm",
@@ -63,19 +65,30 @@ class DetectionOrchestrator:
             })
 
         # ----------------------------------------------------------------------
-        # LAYER 3: RAD-S1 AI-Agent Attribution (Conditional)
-        # Evaluated when user agent hints AI crawler, resemble token is present,
-        # or goal-directed direct traversals are observed.
+        # LAYER 3: RAD-S1 AI-Agent Attribution & Credential Validation
+        # Evaluated when user agent hints AI crawler, API keys / resemble token present,
+        # or automated traffic is detected.
         # ----------------------------------------------------------------------
         ua_str = (user_agent or "").lower()
-        has_ai_indicator = any(k in ua_str for k in ("claude", "gpt", "perplexity", "bot", "crawler", "agent"))
-        requires_l3 = has_ai_indicator or bool(resemble_token) or (l1_result.get("predicted_class") == "automated_bot")
+        has_ai_indicator = any(k in ua_str for k in (
+            "gemini", "google-genai", "google-generativeai", "googleagent", "google-extended",
+            "claude", "gpt", "perplexity", "bot", "crawler", "agent", "langchain"
+        ))
+        headers_lower = {str(k).lower(): str(v) for k, v in session_metadata.get("headers", {}).items()}
+        has_agent_key = (
+            bool(resemble_token)
+            or bool(session_metadata.get("gemini_api_key"))
+            or bool(session_metadata.get("api_key"))
+            or "x-goog-api-key" in headers_lower
+            or "x-gemini-api-key" in headers_lower
+        )
+        requires_l3 = has_ai_indicator or has_agent_key or (l1_result.get("predicted_class") == "automated_bot")
 
         l3_result = None
         if requires_l3:
             l3_result = self.registry.rad_s1.evaluate(events, user_agent, resemble_token, session_metadata)
             audit_trail["executed_layers"].append("rad_s1")
-            self.registry.record_run("rad_s1", l3_result.get("latency_ms", 3.2), bool(l3_result.get("agent_detected")))
+            self.registry.record_run("rad_s1", l3_result.get("latency_ms", 2.2), bool(l3_result.get("agent_detected")))
         else:
             audit_trail["skipped_layers"].append({
                 "layer": "rad_s1",

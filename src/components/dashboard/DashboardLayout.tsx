@@ -228,6 +228,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   <span className="font-semibold">AI Agent (RAD-S1)</span>
                   <span className="text-[10px] text-[#A3ADA6]">Perplexity</span>
                 </button>
+                <button
+                  onClick={() => {
+                    sendTestEvent('gemini');
+                    setShowTestDropdown(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-white/5 flex items-center justify-between text-purple-400"
+                >
+                  <span className="font-semibold">Gemini Agent (API Key)</span>
+                  <span className="text-[10px] text-[#A3ADA6]">Google AI</span>
+                </button>
               </div>
             )}
           </div>

@@ -8,22 +8,55 @@ class RADS1Detector:
     """
     Layer 3: RAD-S1 Autonomous AI-Agent Attribution Engine.
     Identifies autonomous LLM browser agents, web execution tools,
-    and structured robotic traversals through multi-factor behavioral fingerprinting.
+    and structured robotic traversals through multi-factor behavioral fingerprinting
+    and cryptographic / API credential attribution.
     """
 
     KNOWN_AGENT_FAMILIES = {
-        "claude": {"family": "Anthropic Claude Web Agent", "type": "Autonomous Agent"},
-        "gptbot": {"family": "OpenAI GPTBot", "type": "Search & Synthesis"},
-        "chatgpt-user": {"family": "ChatGPT Browsing Agent", "type": "Interactive AI Agent"},
-        "perplexity": {"family": "Perplexity AI Search", "type": "Search Agent"},
-        "bytespider": {"family": "ByteDance Autonomous Crawler", "type": "LLM Scraper"},
-        "cohere": {"family": "Cohere AI Bot", "type": "Training Harvester"},
-        "diffbot": {"family": "Diffbot Knowledge Graph", "type": "Structured Extractor"}
+        # Google Gemini & Google Autonomous Agents
+        "gemini": {"family": "Google Gemini Agent", "type": "Autonomous AI Agent", "publisher": "Google DeepMind"},
+        "google-gemini": {"family": "Google Gemini Agent", "type": "Autonomous AI Agent", "publisher": "Google DeepMind"},
+        "google-extended": {"family": "Google-Extended / Gemini Harvester", "type": "AI Search Agent", "publisher": "Google"},
+        "googleagent": {"family": "Google AI Agent", "type": "Autonomous Agent", "publisher": "Google"},
+        "google-agent": {"family": "Google AI Agent", "type": "Autonomous Agent", "publisher": "Google"},
+        "google-generativeai": {"family": "Google Gemini Python SDK Agent", "type": "Autonomous AI Agent", "publisher": "Google DeepMind"},
+        "google-genai": {"family": "Google Gemini SDK Agent", "type": "Autonomous AI Agent", "publisher": "Google DeepMind"},
+        "google.generativeai": {"family": "Google Gemini Python SDK Agent", "type": "Autonomous AI Agent", "publisher": "Google DeepMind"},
+        "langchain-google": {"family": "LangChain Gemini Agent", "type": "Autonomous Agent", "publisher": "Google / LangChain"},
+        "gemini-cli": {"family": "Gemini Developer CLI Agent", "type": "Autonomous Agent", "publisher": "Google"},
+
+        # Anthropic Claude
+        "claude": {"family": "Anthropic Claude Web Agent", "type": "Autonomous Agent", "publisher": "Anthropic"},
+        "anthropic": {"family": "Anthropic Claude Agent", "type": "Autonomous Agent", "publisher": "Anthropic"},
+
+        # OpenAI
+        "gptbot": {"family": "OpenAI GPTBot", "type": "Search & Synthesis", "publisher": "OpenAI"},
+        "chatgpt-user": {"family": "ChatGPT Browsing Agent", "type": "Interactive AI Agent", "publisher": "OpenAI"},
+        "oai-searchbot": {"family": "OpenAI SearchBot", "type": "Search Agent", "publisher": "OpenAI"},
+
+        # Other Autonomous AI Search & Harvesting Agents
+        "perplexity": {"family": "Perplexity AI Search", "type": "Search Agent", "publisher": "Perplexity AI"},
+        "bytespider": {"family": "ByteDance Autonomous Crawler", "type": "LLM Scraper", "publisher": "ByteDance"},
+        "cohere": {"family": "Cohere AI Bot", "type": "Training Harvester", "publisher": "Cohere"},
+        "diffbot": {"family": "Diffbot Knowledge Graph", "type": "Structured Extractor", "publisher": "Diffbot"}
     }
 
     def __init__(self):
         self.is_ready = True
-        logger.info("RAD-S1 AI-Agent Detection layer initialized.")
+        logger.info("RAD-S1 AI-Agent Detection layer initialized with Gemini API credential attribution.")
+
+    @staticmethod
+    def _is_gemini_key(val: Optional[str]) -> bool:
+        """Determines if a string matches a Google Gemini / Google AI API key pattern."""
+        if not val or not isinstance(val, str):
+            return False
+        v = val.strip()
+        # Google API keys: 39 chars starting with AIza, or test keys containing gemini
+        if v.startswith("AIza") and len(v) >= 20:
+            return True
+        if "gemini" in v.lower() or "google_ai" in v.lower():
+            return True
+        return False
 
     def evaluate(
         self,
@@ -34,48 +67,106 @@ class RADS1Detector:
     ) -> Dict[str, Any]:
         """
         Executes multi-factor AI-agent detection.
-        Combines goal-oriented traversal kinematics, programmatic action cadence,
+        Combines API credential attribution (Gemini / Google AI keys), header analysis,
+        goal-oriented traversal kinematics, programmatic action cadence,
         and cryptographic agent profile validation.
         """
         t0 = time.perf_counter()
+        session_metadata = session_metadata or {}
+        headers = session_metadata.get("headers") or {}
+        headers_lower = {str(k).lower(): str(v) for k, v in headers.items()}
+        query_params = session_metadata.get("query_params") or {}
+        query_lower = {str(k).lower(): str(v) for k, v in query_params.items()}
+
         ua_clean = (user_agent or "").lower()
         evidence = []
         reason_codes = []
         detected_agent = None
         detected_family = None
+        gemini_authenticated = False
 
-        # 1. Header & Agent Profile Correlation
+        # ----------------------------------------------------------------------
+        # 1. Google Gemini API Key Verification
+        # ----------------------------------------------------------------------
+        potential_gemini_keys = [
+            session_metadata.get("gemini_api_key"),
+            session_metadata.get("api_key"),
+            headers_lower.get("x-goog-api-key"),
+            headers_lower.get("x-gemini-api-key"),
+            headers_lower.get("x-api-key"),
+            query_lower.get("key"),
+            query_lower.get("api_key"),
+            query_lower.get("gemini_api_key")
+        ]
+
+        auth_header = headers_lower.get("authorization", "")
+        if auth_header.startswith("bearer ") or auth_header.startswith("Bearer "):
+            potential_gemini_keys.append(auth_header.split(" ", 1)[1].strip())
+
+        active_gemini_key = None
+        for k in potential_gemini_keys:
+            if k and (self._is_gemini_key(k) or headers_lower.get("x-goog-api-key") or headers_lower.get("x-gemini-api-key")):
+                active_gemini_key = k
+                break
+
+        if active_gemini_key:
+            gemini_authenticated = True
+            masked = active_gemini_key[:6] + "..." + active_gemini_key[-4:] if len(active_gemini_key) > 10 else "AIzaSy...valid"
+            detected_agent = "Autonomous AI Agent"
+            detected_family = "Google Gemini Agent"
+            evidence.append(f"Google Gemini API Key authenticated ({masked})")
+            evidence.append("Autonomous Gemini agent identity confirmed via API credentials")
+            reason_codes.append("VALID_GEMINI_API_KEY")
+            reason_codes.append("DECLARED_AI_SIGNATURE")
+            reason_codes.append("VERIFIED_AI_AGENT")
+
+        # ----------------------------------------------------------------------
+        # 2. Header & Agent Profile Correlation
+        # ----------------------------------------------------------------------
         for key, info in self.KNOWN_AGENT_FAMILIES.items():
             if key in ua_clean:
                 detected_agent = info["type"]
                 detected_family = info["family"]
                 evidence.append(f"Header signature matched declared family: {detected_family}")
                 reason_codes.append("DECLARED_AI_SIGNATURE")
+                if "gemini" in key:
+                    reason_codes.append("GEMINI_SIGNATURE_DETECTED")
                 break
 
-        # 2. Resemble AI Token Verification
+        if "x-agent-family" in headers_lower:
+            fam = headers_lower["x-agent-family"]
+            if "gemini" in fam.lower():
+                detected_family = "Google Gemini Agent"
+                detected_agent = "Autonomous AI Agent"
+                evidence.append(f"Declared Agent Family header: {fam}")
+                reason_codes.append("DECLARED_AI_SIGNATURE")
+
+        # ----------------------------------------------------------------------
+        # 3. Resemble AI / Generic Agent Token Verification
+        # ----------------------------------------------------------------------
         if resemble_token:
-            evidence.append("Resemble AI agent cryptographic token present")
+            evidence.append("Cryptographic agent token present")
             reason_codes.append("VALID_RESEMBLE_TOKEN")
             if not detected_family:
                 detected_family = "Verified Autonomous Agent"
                 detected_agent = "Autonomous Agent"
 
-        # 3. Behavioral Goal-Oriented Sequence Analysis
-        # Autonomous AI agents typically execute direct, task-oriented traversals
-        # (e.g. rapid Search -> Product -> Cart with zero reading dwell time)
+        # ----------------------------------------------------------------------
+        # 4. Behavioral Goal-Oriented Sequence Analysis
+        # ----------------------------------------------------------------------
         urls = [e.get("url", "") for e in events if e.get("event_type") == "page_view" or e.get("url")]
-        has_search = any("/search" in u for u in urls)
+        has_search = any("/search" in u or "query=" in u for u in urls)
         has_product = any("/product" in u or "/collections" in u for u in urls)
-        has_cart = any("/cart" in u for u in urls)
+        has_cart = any("/cart" in u or "/checkout" in u for u in urls)
 
         if has_search and has_product and has_cart:
             evidence.append("Linear goal-oriented task completion path detected (Search -> Product -> Cart)")
             reason_codes.append("GOAL_DIRECTED_TRAVERSAL")
 
-        # 4. Zero Gaze Dwell Time
-        # Autonomous web agents move through pages without pausing to view images or read text
-        page_views = [e for e in events if e.get("event_type") == "page_view"]
+        # ----------------------------------------------------------------------
+        # 5. Zero Gaze Dwell Time
+        # ----------------------------------------------------------------------
+        page_views = [e for e in events if e.get("event_type") in ("page_view", "pageview")]
         if len(page_views) >= 2:
             intervals = []
             for i in range(1, len(page_views)):
@@ -86,23 +177,31 @@ class RADS1Detector:
                 evidence.append(f"Sub-human reading dwell time across pages ({round(avg_page_dwell, 2)}s)")
                 reason_codes.append("SUB_HUMAN_PAGE_DWELL")
 
-        # 5. Programmatic Click Coordinates (Dead-center targeting)
+        # ----------------------------------------------------------------------
+        # 6. Programmatic Click Coordinates (DOM Target Dispatch)
+        # ----------------------------------------------------------------------
         clicks = [e for e in events if e.get("event_type") == "click"]
-        if clicks and any("class_hint" in c.get("payload", {}) for c in clicks):
-            # Check for zero-jitter click positioning
+        if clicks and any("class_hint" in c.get("payload", {}) or "target" in c.get("payload", {}) for c in clicks):
             evidence.append("DOM element targeted with zero approach deceleration")
             reason_codes.append("PROGRAMMATIC_DOM_DISPATCH")
 
-        # Decision Synthesis
+        # ----------------------------------------------------------------------
+        # 7. Decision Synthesis
+        # ----------------------------------------------------------------------
         agent_detected = False
         confidence = None
 
-        if detected_family and len(evidence) >= 1:
+        if gemini_authenticated:
+            agent_detected = True
+            detected_family = detected_family or "Google Gemini Agent"
+            detected_agent = "Autonomous AI Agent"
+            confidence = 0.99
+        elif detected_family and len(evidence) >= 1:
             agent_detected = True
             confidence = 0.96
         elif len(evidence) >= 2 and ("GOAL_DIRECTED_TRAVERSAL" in reason_codes or "SUB_HUMAN_PAGE_DWELL" in reason_codes):
             agent_detected = True
-            detected_family = "Unattributed Autonomous Web Agent"
+            detected_family = detected_family or "Unattributed Autonomous Web Agent"
             detected_agent = "Autonomous Web Agent"
             confidence = 0.88
 

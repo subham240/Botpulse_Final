@@ -333,6 +333,21 @@ export const MOCK_SESSIONS: SessionRecord[] = [
 
 export const MOCK_AI_AGENTS: AIAgentRecord[] = [
   {
+    id: 'agt-gemini',
+    name: 'Google Gemini Autonomous Agent',
+    family: 'Google Gemini 1.5 / 2.0 Flash',
+    publisher: 'Google DeepMind',
+    declaredCategory: 'Autonomous Agent',
+    intent: 'Legitimate',
+    detectionModel: 'RAD-S1 API Credential Attribution',
+    confidence: 99.8,
+    activeSessions: 26,
+    requestsLast24h: 9840,
+    enforcementPolicy: 'allow',
+    lastActive: 'Just now',
+    description: 'Autonomous multimodal web agent authenticated via Google Gemini API key credentials, executing goal-oriented browsing while respecting web security boundaries.',
+  },
+  {
     id: 'agt-1',
     name: 'Claude Search & Web Agent',
     family: 'Anthropic Claude 3.7',

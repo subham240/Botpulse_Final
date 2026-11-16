@@ -91,6 +91,10 @@ def extract_features_from_events(events: List[Dict[str, Any]], session_metadata:
             direct_dist = math.hypot(xs[-1] - xs[0], ys[-1] - ys[0])
             straight_line_ratio = direct_dist / max(1.0, total_dist)
 
+    # Check user agent for automated scraping tools
+    ua = (session_metadata.get("user_agent") or "").lower()
+    is_automated_tool = any(k in ua for k in ("headless", "puppeteer", "playwright", "selenium", "phantomjs", "scrapy", "curl", "wget", "python-requests"))
+
     # Compile the 27 common features
     features: Dict[str, float] = {
         "NUMBER_OF_REQUESTS": float(n_events),
@@ -117,9 +121,10 @@ def extract_features_from_events(events: List[Dict[str, Any]], session_metadata:
         "STD_DEPTH": float(std_time * 0.1),
         "CONSECUTIVE": float(straight_line_ratio),
         "DATA": float(n_events * 1450.0),
-        "SF_REFERRER": 0.80 if session_metadata.get("referrer") else 0.20,
-        "SF_FILETYPE": 0.45,
-        "MAX_BARRAGE": float(max_barrage),
+        "SF_REFERRER": 0.05 if is_automated_tool else (0.80 if session_metadata.get("referrer") else 0.20),
+        "SF_FILETYPE": 0.95 if is_automated_tool else 0.45,
+        "MAX_BARRAGE": float(max(max_barrage, 12.0 if is_automated_tool else max_barrage)),
+        "IS_AUTOMATED_TOOL": 1.0 if is_automated_tool else 0.0,
     }
 
     return features

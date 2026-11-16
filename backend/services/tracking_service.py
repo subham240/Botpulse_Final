@@ -26,6 +26,11 @@ class TrackingService:
         user_agent = batch_data.get("user_agent", "Unknown Browser")
         resemble_token = batch_data.get("resemble_token")
         raw_events = batch_data.get("events", [])
+        session_metadata = batch_data.get("session_metadata") or {}
+        if batch_data.get("gemini_api_key"):
+            session_metadata["gemini_api_key"] = batch_data.get("gemini_api_key")
+        if batch_data.get("api_key"):
+            session_metadata["api_key"] = batch_data.get("api_key")
 
         # 1. Update In-memory Event Buffer for Session
         buffered_events = session_service.buffer_events(session_id, raw_events)
@@ -33,7 +38,7 @@ class TrackingService:
         # 2. Extract trajectory coordinates for 2D visualizer
         coords = []
         for e in buffered_events:
-            if e.get("event_type") == "mouse_move" and "payload" in e:
+            if e.get("event_type") in ("mouse_move", "mousemove") and "payload" in e:
                 p = e["payload"]
                 if "x" in p and "y" in p:
                     coords.append({"x": p["x"], "y": p["y"], "t": e.get("timestamp", 0)})
@@ -43,7 +48,8 @@ class TrackingService:
             session_id=session_id,
             events=buffered_events,
             user_agent=user_agent,
-            resemble_token=resemble_token
+            resemble_token=resemble_token,
+            session_metadata=session_metadata
         )
 
         # 4. Evaluate Unified Risk Engine
@@ -115,7 +121,7 @@ class TrackingService:
             "action": prevention_result["action"],
             "risk_score": prevention_result["risk_score"],
             "risk_level": prevention_result["risk_level"],
-            "predicted_label": risk_result["visitor_category"].replace('_', ' ').title(),
+            "predicted_label": "AI Agent" if risk_result["visitor_category"] == "ai_agent" else risk_result["visitor_category"].replace('_', ' ').title(),
             "confidence": prevention_result["confidence"],
             "decision_token": prevention_result["decision_token"],
             "reasons": risk_result["reason_codes"]

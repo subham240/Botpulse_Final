@@ -14,6 +14,10 @@ class TelemetryBatch(BaseModel):
     visitor_id: Optional[str] = None
     user_agent: Optional[str] = None
     resemble_token: Optional[str] = None
+    api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
+    agent_family: Optional[str] = None
+    session_metadata: Dict[str, Any] = Field(default_factory=dict)
     events: List[EventItem] = Field(default_factory=list)
 
 class DecisionResponse(BaseModel):

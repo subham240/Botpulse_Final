@@ -59,7 +59,7 @@ class ModelRegistry:
             "lstm": {
                 "layer": "lstm",
                 "name": "Stage 2 — Bidirectional LSTM Behavioral Sequencer",
-                "status": "READY",
+                "status": "READY" if self.lstm.is_ready else "UNAVAILABLE",
                 "version": "v2.1-kinematic",
                 "latency_ms": avg_lat("lstm") or 4.5,
                 "invocations": self.stats["lstm"]["invocations"],

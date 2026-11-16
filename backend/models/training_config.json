@@ -54,11 +54,6 @@
     "web_robot_detection": 13471
   },
   "evaluation_summary": {
-    "random_forest": {
-      "accuracy": 0.9255099024534437,
-      "macro_f1": 0.8963438171539251,
-      "latency_mean_ms": 72.42727699987881
-    },
     "xgboost": {
       "accuracy": 0.9265444871415903,
       "macro_f1": 0.8970843679367391,
