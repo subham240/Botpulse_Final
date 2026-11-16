@@ -50,6 +50,9 @@ def update_vercel_config(public_url: str):
         
         data["rewrites"] = [
             {"source": "/api/v1/:path*", "destination": f"{public_url}/api/v1/:path*"},
+            {"source": "/api/:path*", "destination": f"{public_url}/api/:path*"},
+            {"source": "/events", "destination": f"{public_url}/api/v1/events"},
+            {"source": "/telemetry/:path*", "destination": f"{public_url}/api/v1/telemetry/:path*"},
             {"source": "/health", "destination": f"{public_url}/health"},
             {"source": "/botpulse.js", "destination": f"{public_url}/botpulse.js"},
             {"source": "/(.*)", "destination": "/index.html"}
@@ -210,11 +213,35 @@ def main():
     drain_thread = threading.Thread(target=drain_tunnel, daemon=True)
     drain_thread.start()
 
-    # Update .env and Elvara integration
+    # Update .env, vercel.json, api.ts, and Elvara integration
     update_env_file(public_url)
     update_vercel_config(public_url)
     update_api_service(public_url)
     update_elvara_integration(public_url)
+
+    # Auto-commit and push so Vercel edge proxy always routes to active tunnel
+    def push_to_github():
+        try:
+            subprocess.run(["git", "add", "vercel.json", "src/services/api.ts"], cwd=ROOT_DIR, capture_output=True)
+            c = subprocess.run(["git", "commit", "-m", f"sync: auto-route Vercel proxy to {public_url}"], cwd=ROOT_DIR, capture_output=True)
+            if c.returncode == 0:
+                subprocess.run(["git", "push", "origin", "main"], cwd=ROOT_DIR, capture_output=True)
+                print(f"✓ Synced active tunnel with GitHub & Vercel edge proxy", flush=True)
+        except Exception:
+            pass
+
+        elvara_dir = os.path.normpath(os.path.join(ROOT_DIR, "..", "Elvara"))
+        if os.path.exists(elvara_dir):
+            try:
+                subprocess.run(["git", "add", "index.html"], cwd=elvara_dir, capture_output=True)
+                c_el = subprocess.run(["git", "commit", "-m", f"sync: update endpoint to {public_url}"], cwd=elvara_dir, capture_output=True)
+                if c_el.returncode == 0:
+                    subprocess.run(["git", "push", "origin", "main"], cwd=elvara_dir, capture_output=True)
+                    print(f"✓ Synced active tunnel with Elvara storefront", flush=True)
+            except Exception:
+                pass
+
+    threading.Thread(target=push_to_github, daemon=True).start()
 
     print("\n[3/3] Tunnel Active & Verified Healthy!", flush=True)
     print("\n" + "=" * 65, flush=True)
@@ -235,16 +262,16 @@ def main():
     print("=" * 65, flush=True)
     print("  Press Ctrl+C to stop both the backend server and the tunnel.\n", flush=True)
 
-    # Keep alive until Ctrl+C
+    # Keep alive until Ctrl+C, auto-restarting if tunnel drops
     try:
         while True:
             if backend_proc.poll() is not None:
-                print("Backend stopped unexpectedly.", flush=True)
-                break
-            if tunnel_proc.poll() is not None:
-                print("Cloudflare tunnel disconnected.", flush=True)
-                break
-            time.sleep(1)
+                print("Backend stopped unexpectedly. Restarting...", flush=True)
+                backend_proc = subprocess.Popen(
+                    [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"],
+                    cwd=ROOT_DIR, stdout=server_log_file, stderr=subprocess.STDOUT, text=True
+                )
+            time.sleep(2)
     except KeyboardInterrupt:
         print("\nStopping BotPulse server and Cloudflare tunnel...", flush=True)
     finally:

@@ -573,11 +573,20 @@ class DatabaseManager:
     # --------------------------------------------------------------------------
     # Websites Repository
     # --------------------------------------------------------------------------
+    _website_cache = {}
+
     def get_website_by_key(self, site_key: str) -> Optional[Dict[str, Any]]:
+        if not site_key:
+            return None
+        if site_key in self._website_cache:
+            return self._website_cache[site_key]
         if self.is_mongodb:
-            return self.mongo_db.websites.find_one({"site_key": site_key})
+            res = self.mongo_db.websites.find_one({"site_key": site_key})
         else:
-            return self._query_one("SELECT * FROM websites WHERE site_key = ? OR site_id = ?", (site_key, site_key))
+            res = self._query_one("SELECT * FROM websites WHERE site_key = ? OR site_id = ?", (site_key, site_key))
+        if res:
+            self._website_cache[site_key] = res
+        return res
 
     def get_website_by_domain(self, domain_or_key: str) -> Optional[Dict[str, Any]]:
         if not domain_or_key:

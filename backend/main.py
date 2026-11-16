@@ -56,6 +56,8 @@ app.include_router(websites_router, prefix=settings.API_V1_STR)
 app.include_router(events_router, prefix=settings.API_V1_STR)
 app.include_router(dashboard_router, prefix=settings.API_V1_STR)
 app.include_router(prevention_router, prefix=settings.API_V1_STR)
+# Mount root aliases for telemetry ingestion
+app.include_router(events_router, prefix="")
 
 # Serve Client Tracking SDK directly from root and API paths
 SDK_PATH = os.path.join(os.path.dirname(__file__), "sdk", "botpulse.js")

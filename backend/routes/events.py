@@ -5,10 +5,13 @@ from backend.schemas.telemetry import TelemetryBatch, DecisionResponse
 from backend.services.tracking_service import tracking_service
 from backend.database import db
 
-router = APIRouter(prefix="/events", tags=["Telemetry Ingestion"])
+router = APIRouter(tags=["Telemetry Ingestion"])
 
-@router.post("", response_model=DecisionResponse)
-async def ingest_telemetry_events(batch: TelemetryBatch, request: Request):
+@router.post("/events", response_model=DecisionResponse)
+@router.post("/events/events", response_model=DecisionResponse)
+@router.post("/telemetry/events", response_model=DecisionResponse)
+@router.post("/telemetry", response_model=DecisionResponse)
+def ingest_telemetry_events(batch: TelemetryBatch, request: Request):
     """
     Ingests client-side telemetry batches from botpulse.js or AI agents.
     Executes Three-Layer Detection Orchestration (XGBoost -> LSTM -> RAD-S1).
@@ -63,8 +66,10 @@ async def ingest_telemetry_events(batch: TelemetryBatch, request: Request):
     decision = tracking_service.process_telemetry_batch(batch_dict, client_ip=client_ip)
     return decision
 
+@router.post("/events/test-agent", response_model=DecisionResponse)
+@router.post("/telemetry/test-agent", response_model=DecisionResponse)
 @router.post("/test-agent", response_model=DecisionResponse)
-async def test_ai_agent(payload: Dict[str, Any] = Body(...), request: Request = None):
+def test_ai_agent(payload: Dict[str, Any] = Body(...), request: Request = None):
     """
     Dedicated testing endpoint for AI agents (e.g. Gemini, Claude, GPTBot).
     Validates API key attribution, executes 3-layer detection, and returns the classification.
