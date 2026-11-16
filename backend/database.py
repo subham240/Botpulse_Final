@@ -78,10 +78,11 @@ class DatabaseManager:
                     try:
                         logger.info("Connecting to Supabase PostgreSQL database...")
                         self.pg_pool = pool.ThreadedConnectionPool(
-                            minconn=1,
-                            maxconn=10,
+                            minconn=3,
+                            maxconn=50,
                             dsn=target_url
                         )
+                        self._active_pg_url = target_url
                         self.is_postgres = True
                         self._init_postgres()
                         logger.info("Connected successfully to Supabase Cloud PostgreSQL!")
@@ -121,18 +122,55 @@ class DatabaseManager:
 
     @contextmanager
     def _pg_cursor(self):
-        """Context manager for thread-safe Supabase PostgreSQL queries."""
-        conn = self.pg_pool.getconn()
+        """Context manager for thread-safe Supabase PostgreSQL queries with retry & overflow resilience."""
+        import time
+        conn = None
+        is_overflow = False
+
+        for attempt in range(8):
+            try:
+                conn = self.pg_pool.getconn()
+                break
+            except Exception as pe:
+                if "exhausted" in str(pe).lower() and attempt < 7:
+                    time.sleep(0.04 * (attempt + 1))
+                else:
+                    break
+
+        if conn is None:
+            # Fallback: On-demand connection if pool is completely saturated
+            try:
+                import psycopg2
+                fallback_url = getattr(self, "_active_pg_url", None) or settings.SUPABASE_DB_URL
+                conn = psycopg2.connect(fallback_url, connect_timeout=5)
+                is_overflow = True
+            except Exception as err:
+                logger.error("Failed to acquire PostgreSQL connection: %s", err)
+                raise
+
         try:
             from psycopg2.extras import RealDictCursor
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 yield cur
             conn.commit()
         except Exception:
-            conn.rollback()
+            if conn:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             raise
         finally:
-            self.pg_pool.putconn(conn)
+            if is_overflow and conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            elif conn is not None:
+                try:
+                    self.pg_pool.putconn(conn)
+                except Exception:
+                    pass
 
     def _clean_row(self, row) -> Optional[Dict[str, Any]]:
         if not row:
