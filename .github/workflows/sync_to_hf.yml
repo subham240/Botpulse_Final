@@ -1,0 +1,31 @@
+name: Sync to Hugging Face Hub
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USER: ${{ secrets.HF_USERNAME || 'subham240' }}
+          HF_SPACE: ${{ secrets.HF_SPACE_NAME || 'botpulse-api' }}
+        run: |
+          if [ -n "$HF_TOKEN" ]; then
+            echo "Syncing code to Hugging Face Space: $HF_USER/$HF_SPACE..."
+            git push --force https://$HF_USER:$HF_TOKEN@huggingface.co/spaces/$HF_USER/$HF_SPACE main:main
+            echo "✓ Successfully synced to Hugging Face Hub!"
+          else
+            echo "⚠️ HF_TOKEN secret is not configured in GitHub Secrets."
+            echo "To enable automatic syncing, add your Hugging Face write token as 'HF_TOKEN' in GitHub Repo Settings -> Secrets -> Actions."
+          fi
