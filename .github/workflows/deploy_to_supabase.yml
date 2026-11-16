@@ -31,4 +31,5 @@ jobs:
       - name: Deploy Migrations & Seeds to Supabase
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python .github/deploy_supabase.py
