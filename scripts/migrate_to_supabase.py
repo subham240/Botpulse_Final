@@ -155,19 +155,20 @@ def main():
         migrated_sessions += 1
     dest_conn.commit()
 
-    # Migrate events
-    migrated_events = 0
-    for ev in events:
-        dest_cur.execute("""
-        INSERT INTO events (id, session_id, site_key, event_type, url, timestamp, sequence_num, payload)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (id) DO NOTHING
-        """, (
-            ev["id"], ev.get("session_id"), ev.get("site_key"), ev.get("event_type"),
-            ev.get("url"), ev.get("timestamp"), ev.get("sequence_num", 1), ev.get("payload")
-        ))
-        migrated_events += 1
+    # Migrate events using fast batch execution
+    from psycopg2.extras import execute_batch
+    ev_tuples = [
+        (ev["id"], ev.get("session_id"), ev.get("site_key"), ev.get("event_type"),
+         ev.get("url"), ev.get("timestamp"), ev.get("sequence_num", 1), ev.get("payload"))
+        for ev in events
+    ]
+    execute_batch(dest_cur, """
+    INSERT INTO events (id, session_id, site_key, event_type, url, timestamp, sequence_num, payload)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO NOTHING
+    """, ev_tuples, page_size=250)
     dest_conn.commit()
+    migrated_events = len(ev_tuples)
 
     # Migrate threats
     migrated_threats = 0
