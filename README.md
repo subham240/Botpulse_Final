@@ -1,23 +1,49 @@
-# BotPulse
+---
+title: Botpulse AI Security Engine
+emoji: 🛡️
+colorFrom: green
+colorTo: blue
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: false
+---
 
-## Deploy the frontend to Vercel
+# BotPulse — Next-Gen AI Bot Detection & Prevention Engine
 
-Import this repository into Vercel. The project uses Vite; use `npm run build` as
-the build command and `dist` as the output directory.
+Three-layer hybrid detection engine:
+1. **Stage 1:** XGBoost Tabular Base Classifier (27 features, sub-millisecond screening)
+2. **Stage 2:** Bidirectional LSTM Sequential Sequencer (PyTorch deep trajectory kinematics)
+3. **Stage 3:** Resemble AI RAD-S1 Autonomous Agent Attribution Engine (Gemini & LLM signatures)
 
-Set `VITE_API_URL` in the Vercel project environment to the HTTPS base URL of a
-deployed BotPulse API, including `/api/v1`. The FastAPI backend is not hosted by
-this static Vite deployment and must be deployed separately. Without this
-setting, the frontend uses the local development API URL.
+---
 
-## Backend configuration
+## 24/7 Cloud Deployment Guide (100% Free)
 
-Set `BOTPULSE_SECRET_KEY` in the backend host's environment to a unique random
-value of at least 32 characters. For local development, copy `.env.example` to
-`.env` and replace the example key; do not commit `.env`.
+### Part A: Deploy Backend to Hugging Face Spaces (Free 16 GB RAM)
+1. Go to [huggingface.co/new-space](https://huggingface.co/new-space).
+2. Set Space name: `botpulse-api`.
+3. Select **Space SDK: Gradio** (leave hardware as default **Free 2 vCPU · 16 GB RAM**).
+4. Connect this GitHub repository (`subham240/Botpulse_Final`) or push your code.
+5. Hugging Face will automatically read `app.py` and `requirements.txt` and boot the FastAPI backend 24/7.
+6. Your live public API URL will be:
+   `https://<your-hf-username>-botpulse-api.hf.space`
 
-Generate a key with:
+---
 
+### Part B: Deploy Frontend to Vercel (Free 24/7 Global CDN)
+1. Go to [vercel.com](https://vercel.com) and log in with GitHub.
+2. Click **Add New Project** → Import `subham240/Botpulse_Final`.
+3. Framework Preset: **Vite** (Build command: `npm run build`, Output: `dist`).
+4. Under **Environment Variables**, add:
+   - `VITE_API_URL` = `https://<your-hf-username>-botpulse-api.hf.space/api/v1`
+5. Click **Deploy**.
+
+---
+
+## Backend Configuration
+
+Set `BOTPULSE_SECRET_KEY` in the environment to a secure random string:
 ```sh
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
