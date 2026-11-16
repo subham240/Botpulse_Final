@@ -130,7 +130,7 @@ def main():
     server_log_file = open(SERVER_LOG, "w", encoding="utf-8")
     
     backend_proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000"],
+        [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"],
         cwd=ROOT_DIR,
         stdout=server_log_file,
         stderr=subprocess.STDOUT,

@@ -4,7 +4,7 @@
  */
 
 export function getApiBaseUrl(): string {
-  const DEFAULT_TUNNEL_API = 'https://appointment-basis-latitude-pick.trycloudflare.com/api/v1';
+  const DEFAULT_TUNNEL_API = 'https://often-matching-elected-consortium.trycloudflare.com/api/v1';
 
   if (typeof window !== 'undefined') {
     // 1. Explicit query param ?api=... overrides everything

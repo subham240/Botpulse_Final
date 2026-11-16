@@ -5,15 +5,15 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://appointment-basis-latitude-pick.trycloudflare.com/api/v1/:path*"
+      "destination": "https://often-matching-elected-consortium.trycloudflare.com/api/v1/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://appointment-basis-latitude-pick.trycloudflare.com/health"
+      "destination": "https://often-matching-elected-consortium.trycloudflare.com/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://appointment-basis-latitude-pick.trycloudflare.com/botpulse.js"
+      "destination": "https://often-matching-elected-consortium.trycloudflare.com/botpulse.js"
     },
     {
       "source": "/(.*)",

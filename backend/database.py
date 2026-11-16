@@ -53,7 +53,7 @@ class DatabaseManager:
         # 1. Check for Supabase Cloud PostgreSQL connection string
         supabase_db_url = settings.SUPABASE_DB_URL or os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
         if not supabase_db_url:
-            supabase_db_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require"
+            supabase_db_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require"
 
         if supabase_db_url and ("postgres" in supabase_db_url.lower()):
             try:
@@ -67,9 +67,10 @@ class DatabaseManager:
                 if "sslmode=" not in clean_url:
                     clean_url += ("&" if "?" in clean_url else "?") + "sslmode=require"
 
-                # Check if URL uses direct IPv6 host; prepare IPv4 pooler alternatives
+                # Prefer IPv4 Transaction Pooler (port 6543) which has no 15-client session limits
+                clean_url = clean_url.replace(":5432/", ":6543/").replace(":5432?", ":6543?")
+                pooler_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require"
                 urls_to_try = [clean_url]
-                pooler_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require"
                 if pooler_url not in urls_to_try:
                     urls_to_try.append(pooler_url)
 
@@ -78,8 +79,8 @@ class DatabaseManager:
                     try:
                         logger.info("Connecting to Supabase PostgreSQL database...")
                         self.pg_pool = pool.ThreadedConnectionPool(
-                            minconn=3,
-                            maxconn=50,
+                            minconn=2,
+                            maxconn=30,
                             dsn=target_url
                         )
                         self._active_pg_url = target_url
@@ -141,7 +142,8 @@ class DatabaseManager:
             # Fallback: On-demand connection if pool is completely saturated
             try:
                 import psycopg2
-                fallback_url = getattr(self, "_active_pg_url", None) or settings.SUPABASE_DB_URL
+                raw_url = getattr(self, "_active_pg_url", None) or settings.SUPABASE_DB_URL or ""
+                fallback_url = raw_url.replace(":5432/", ":6543/").replace(":5432?", ":6543?")
                 conn = psycopg2.connect(fallback_url, connect_timeout=5)
                 is_overflow = True
             except Exception as err:
@@ -866,6 +868,14 @@ class DatabaseManager:
         Aggregates live counts strictly from real database records.
         Supports Supabase Cloud PostgreSQL, MongoDB, and SQLite.
         """
+        import time as _time
+        cache_key = f"{site_key}_{time_range}"
+        now_ts = _time.time()
+        if not hasattr(self, "_dashboard_cache"):
+            self._dashboard_cache = {}
+        cached = self._dashboard_cache.get(cache_key)
+        if cached and (now_ts - cached["ts"]) < 3.0:
+            return cached["data"]
         if self.is_mongodb:
             query = {"site_key": site_key} if site_key and site_key != "all" else {}
             total_sessions = self.mongo_db.sessions.count_documents(query)
@@ -988,17 +998,25 @@ class DatabaseManager:
             req_row = self._query_one(f"SELECT COUNT(*) as count FROM events {ev_count_where}", tuple(ev_params))
             total_reqs = req_row["count"] if req_row else 0
 
-            def count_sess_cat(cat_name):
-                conds = list(sess_conditions) + ["category = ?"]
-                params_list = list(sess_params) + [cat_name]
-                w = "WHERE " + " AND ".join(conds)
-                res = self._query_one(f"SELECT COUNT(*) as count FROM sessions {w}", tuple(params_list))
-                return res["count"] if res else 0
-
-            human = count_sess_cat("human")
-            trad_bot = count_sess_cat("traditional_bot")
-            adv_bot = count_sess_cat("advanced_bot")
-            ai_agent = count_sess_cat("ai_agent")
+            agg_sql = f"""
+            SELECT 
+                COUNT(*) as total_sessions,
+                SUM(CASE WHEN category = 'human' THEN 1 ELSE 0 END) as human_count,
+                SUM(CASE WHEN category = 'traditional_bot' THEN 1 ELSE 0 END) as trad_bot_count,
+                SUM(CASE WHEN category = 'advanced_bot' THEN 1 ELSE 0 END) as adv_bot_count,
+                SUM(CASE WHEN category = 'ai_agent' THEN 1 ELSE 0 END) as ai_agent_count,
+                SUM(CASE WHEN enforcement IN ('block', 'verify', 'rate_limit') THEN 1 ELSE 0 END) as prevented_count,
+                AVG(risk_score) as avg_risk
+            FROM sessions {sess_where}
+            """
+            agg_row = self._query_one(agg_sql, tuple(sess_params)) or {}
+            total_sessions = agg_row.get("total_sessions") or 0
+            human = agg_row.get("human_count") or 0
+            trad_bot = agg_row.get("trad_bot_count") or 0
+            adv_bot = agg_row.get("adv_bot_count") or 0
+            ai_agent = agg_row.get("ai_agent_count") or 0
+            prevented = agg_row.get("prevented_count") or 0
+            avg_risk = round(float(agg_row["avg_risk"]), 1) if agg_row.get("avg_risk") is not None else 0.0
 
             thr_conditions = []
             thr_params = []
@@ -1008,14 +1026,6 @@ class DatabaseManager:
             thr_where = ("WHERE " + " AND ".join(thr_conditions)) if thr_conditions else ""
             thr_row = self._query_one(f"SELECT COUNT(*) as count FROM threats {thr_where}", tuple(thr_params))
             threats = thr_row["count"] if thr_row else 0
-
-            prev_conds = list(sess_conditions) + ["enforcement IN ('block', 'verify', 'rate_limit')"]
-            w_prev = "WHERE " + " AND ".join(prev_conds)
-            prev_row = self._query_one(f"SELECT COUNT(*) as count FROM sessions {w_prev}", tuple(sess_params))
-            prevented = prev_row["count"] if prev_row else 0
-
-            avg_row = self._query_one(f"SELECT AVG(risk_score) as avg_score FROM sessions {sess_where}", tuple(sess_params))
-            avg_risk = round(avg_row["avg_score"], 1) if avg_row and avg_row["avg_score"] is not None else 0.0
 
             interval_ms = 3600 * 1000 if (time_range in (None, "24h")) else 86400 * 1000
             is_hourly = (time_range in (None, "24h"))
@@ -1158,7 +1168,7 @@ class DatabaseManager:
             non_human = total_sessions - human
             rate = f"{round((prevented / max(1, non_human)) * 100, 1)}%" if non_human > 0 else "100.0%"
             
-            return {
+            res_payload = {
                 "total_requests": total_reqs,
                 "total_sessions": total_sessions,
                 "human_count": human,
@@ -1173,6 +1183,10 @@ class DatabaseManager:
                 "top_pages": top_pages,
                 "behavioral_metrics": behavioral_metrics
             }
+            if not hasattr(self, "_dashboard_cache"):
+                self._dashboard_cache = {}
+            self._dashboard_cache[cache_key] = {"data": res_payload, "ts": _time.time()}
+            return res_payload
 
     def record_pow_event(self, session_id: str, challenge_id: str, difficulty: int, nonce: int, time_taken_ms: float, status: str = "verified"):
         """Records a completed client-side Proof-of-Work hardware integrity challenge."""
