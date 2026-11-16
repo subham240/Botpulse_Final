@@ -4,7 +4,7 @@
  */
 
 export function getApiBaseUrl(): string {
-  const DEFAULT_TUNNEL_API = 'https://exclusively-lawyer-watch-roots.trycloudflare.com/api/v1';
+  const DEFAULT_TUNNEL_API = 'https://refused-them-pharmacology-completion.trycloudflare.com/api/v1';
 
   if (typeof window !== 'undefined') {
     // 1. Check if URL has ?api=https://... to quickly switch or set backend

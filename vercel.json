@@ -5,15 +5,15 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://exclusively-lawyer-watch-roots.trycloudflare.com/api/v1/:path*"
+      "destination": "https://refused-them-pharmacology-completion.trycloudflare.com/api/v1/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://exclusively-lawyer-watch-roots.trycloudflare.com/health"
+      "destination": "https://refused-them-pharmacology-completion.trycloudflare.com/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://exclusively-lawyer-watch-roots.trycloudflare.com/botpulse.js"
+      "destination": "https://refused-them-pharmacology-completion.trycloudflare.com/botpulse.js"
     },
     {
       "source": "/(.*)",
