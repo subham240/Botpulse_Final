@@ -7,7 +7,7 @@ export function getApiBaseUrl(): string {
   const DEFAULT_TUNNEL_API = 'https://refused-them-pharmacology-completion.trycloudflare.com/api/v1';
 
   if (typeof window !== 'undefined') {
-    // 1. Check if URL has ?api=https://... to quickly switch or set backend
+    // 1. Explicit query param ?api=... overrides everything
     try {
       const params = new URLSearchParams(window.location.search);
       const paramUrl = params.get('api');
@@ -21,27 +21,28 @@ export function getApiBaseUrl(): string {
     // 2. Check saved localStorage
     const saved = localStorage.getItem('bp_api_url');
     if (saved && saved.trim() !== '') {
-      // If deployed on Vercel and localStorage is pointing to unreachable 127.0.0.1 or localhost, redirect to active tunnel
-      if (
+      // If saved is an old dead trycloudflare tunnel, purge it!
+      if (saved.includes('trycloudflare.com') && !saved.includes('refused-them-pharmacology-completion')) {
+        localStorage.removeItem('bp_api_url');
+      } else if (
         window.location.hostname !== 'localhost' &&
         window.location.hostname !== '127.0.0.1' &&
         (saved.includes('127.0.0.1') || saved.includes('localhost'))
       ) {
-        localStorage.setItem('bp_api_url', DEFAULT_TUNNEL_API);
-        return DEFAULT_TUNNEL_API;
+        localStorage.removeItem('bp_api_url');
+      } else {
+        return saved.replace(/\/+$/, '');
       }
-      return saved.replace(/\/+$/, '');
+    }
+
+    // 3. If running on Vercel or any production host, use same-origin /api/v1 (proxied by vercel.json)
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return '/api/v1';
     }
   }
 
-  // 3. Environment variable or default
-  const envUrl = (import.meta as any).env?.VITE_API_URL as string;
-  if (envUrl && envUrl.trim() !== '') {
-    return envUrl.replace(/\/+$/, '');
-  }
-
-  // 4. Default: active public Cloudflare tunnel
-  return DEFAULT_TUNNEL_API;
+  // 4. Default for localhost: direct to local backend
+  return 'http://127.0.0.1:8000/api/v1';
 }
 
 export interface ApiUser {

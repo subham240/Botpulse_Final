@@ -34,8 +34,8 @@ export const LoginPage: React.FC = () => {
     } catch (err: any) {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('fetch') || msg.includes('NetworkError')) {
-        localStorage.setItem('bp_api_url', getApiBaseUrl());
-        setError('Cannot reach backend. Reconnecting to live Cloudflare tunnel... Please click Sign In again.');
+        localStorage.removeItem('bp_api_url');
+        setError('Connection reset to live backend proxy. Please click Sign In again.');
       } else {
         setError(msg || 'Authentication failed. Please check your credentials.');
       }
