@@ -1,7 +1,4 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.0.0
 fastapi>=0.115.0
-uvicorn>=0.31.0
 pydantic>=2.9.0
 pydantic-settings>=2.5.0
 python-dotenv>=1.0.0
@@ -13,5 +10,3 @@ joblib>=1.4.0
 scikit-learn>=1.5.0
 xgboost>=2.1.0
 python-multipart>=0.0.9
-huggingface_hub>=0.25.0,<1.0.0
-gradio>=5.0.0
