@@ -90,7 +90,7 @@ def health_check():
     return {
         "status": "online",
         "service": settings.PROJECT_NAME,
-        "database": "mongodb" if db.is_mongodb else "sqlite_fallback",
+        "database": "supabase_postgresql" if getattr(db, "is_postgres", False) else ("mongodb" if db.is_mongodb else "sqlite_fallback"),
         "models": model_registry.get_health_overview(),
         "default_site": settings.DEFAULT_SITE_DOMAIN
     }

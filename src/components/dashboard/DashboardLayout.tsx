@@ -125,9 +125,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     setSelectedDomain('all');
                     setShowDomainDropdown(false);
                   }}
-                  className={`w-full text-left px-3.5 py-2 hover:bg-white/5 flex items-center justify-between ${
-                    selectedDomain === 'all' ? 'text-[#43D6A0] font-bold bg-white/5' : 'text-[#A3ADA6]'
-                  }`}
+                  className={`w-full text-left px-3.5 py-2 hover:bg-white/5 flex items-center justify-between ${selectedDomain === 'all' ? 'text-[#43D6A0] font-bold bg-white/5' : 'text-[#A3ADA6]'
+                    }`}
                 >
                   <span>All Websites</span>
                   <span className="text-[10px] text-[#737F77]">Aggregated</span>
@@ -140,9 +139,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       setSelectedDomain(site.domain);
                       setShowDomainDropdown(false);
                     }}
-                    className={`w-full text-left px-3.5 py-2 hover:bg-white/5 flex items-center justify-between ${
-                      selectedDomain === site.domain ? 'text-[#43D6A0] font-bold bg-white/5' : 'text-[#F5F7F5]'
-                    }`}
+                    className={`w-full text-left px-3.5 py-2 hover:bg-white/5 flex items-center justify-between ${selectedDomain === site.domain ? 'text-[#43D6A0] font-bold bg-white/5' : 'text-[#F5F7F5]'
+                      }`}
                   >
                     <div>
                       <div className="font-semibold">{site.domain}</div>
@@ -320,9 +318,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       <div className="flex-1 flex overflow-hidden">
         {/* Simplified Desktop Sidebar */}
         <aside
-          className={`hidden md:flex flex-col border-r border-white/[0.08] bg-[#101512] transition-all duration-300 z-20 justify-between ${
-            collapsed ? 'w-16' : 'w-56'
-          }`}
+          className={`hidden md:flex flex-col border-r border-white/[0.08] bg-[#101512] transition-all duration-300 z-20 justify-between ${collapsed ? 'w-16' : 'w-56'
+            }`}
         >
           {/* Primary Nav List */}
           <div className="p-3 space-y-1">
@@ -333,11 +330,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all ${
-                    isActive
-                      ? 'bg-[#18221D] text-[#43D6A0] font-semibold border border-[#43D6A0]/20 shadow-sm'
-                      : 'text-[#A3ADA6] hover:text-[#F5F7F5] hover:bg-[#121A16]'
-                  }`}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all ${isActive
+                    ? 'bg-[#18221D] text-[#43D6A0] font-semibold border border-[#43D6A0]/20 shadow-sm'
+                    : 'text-[#A3ADA6] hover:text-[#F5F7F5] hover:bg-[#121A16]'
+                    }`}
                   title={collapsed ? item.label : undefined}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#43D6A0]' : 'text-[#A3ADA6]'}`} />
@@ -356,11 +352,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all ${
-                    isActive
-                      ? 'bg-[#18221D] text-[#43D6A0] font-semibold border border-[#43D6A0]/20'
-                      : 'text-[#A3ADA6] hover:text-[#F5F7F5] hover:bg-[#121A16]'
-                  }`}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all ${isActive
+                    ? 'bg-[#18221D] text-[#43D6A0] font-semibold border border-[#43D6A0]/20'
+                    : 'text-[#A3ADA6] hover:text-[#F5F7F5] hover:bg-[#121A16]'
+                    }`}
                   title={collapsed ? item.label : undefined}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -408,11 +403,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                         key={item.path}
                         to={item.path}
                         onClick={() => setMobileSidebarOpen(false)}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium ${
-                          isActive
-                            ? 'bg-[#18221D] text-[#43D6A0] font-bold border border-[#43D6A0]/20'
-                            : 'text-[#A3ADA6] hover:text-[#F5F7F5]'
-                        }`}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium ${isActive
+                          ? 'bg-[#18221D] text-[#43D6A0] font-bold border border-[#43D6A0]/20'
+                          : 'text-[#A3ADA6] hover:text-[#F5F7F5]'
+                          }`}
                       >
                         <Icon className="w-4 h-4" />
                         <span>{item.label}</span>

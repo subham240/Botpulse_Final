@@ -1,7 +1,9 @@
 """
 Database access layer for BotPulse.
-Supports MongoDB (via pymongo) with seamless fallback to an embedded
-persistent SQLite database if MongoDB is not reachable on the host.
+Supports:
+1. Supabase Cloud PostgreSQL (via psycopg2 connection pool)
+2. MongoDB (via pymongo)
+3. Persistent Embedded SQLite (seamless local fallback)
 """
 
 import os
@@ -12,6 +14,7 @@ import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from urllib.parse import urlparse
+from contextlib import contextmanager
 
 from backend.config import settings
 
@@ -19,6 +22,8 @@ logger = logging.getLogger("botpulse.database")
 
 class DatabaseManager:
     def __init__(self):
+        self.is_postgres: bool = False
+        self.pg_pool = None
         self.is_mongodb: bool = False
         self.mongo_client = None
         self.mongo_db = None
@@ -43,32 +48,266 @@ class DatabaseManager:
         self._init_connection()
 
     def _init_connection(self):
-        """Attempts connection to MongoDB; falls back to SQLite if unavailable."""
-        is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
-        if is_serverless and settings.MONGODB_URI == "mongodb://localhost:27017":
-            # Skip MongoDB entirely on serverless when using default localhost URI
-            logger.info("Serverless environment detected with default MongoDB URI. Using SQLite directly.")
-            self.is_mongodb = False
-            self._init_sqlite()
-            return
-        try:
-            import pymongo
-            timeout = 500 if is_serverless else 2000
-            client = pymongo.MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=timeout)
-            # Trigger server selection
-            client.admin.command('ping')
-            self.mongo_client = client
-            self.mongo_db = client[settings.DATABASE_NAME]
-            self.is_mongodb = True
-            logger.info("Connected successfully to MongoDB at %s", settings.MONGODB_URI)
-            self._ensure_mongo_indexes()
-            return
-        except Exception as e:
-            logger.warning("MongoDB unavailable (%s). Falling back to persistent SQLite storage at %s", e, self.sqlite_path)
+        """Attempts connection to Supabase PostgreSQL, then MongoDB; falls back to SQLite."""
+        # 1. Check for Supabase Cloud PostgreSQL connection string
+        supabase_db_url = settings.SUPABASE_DB_URL or os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+        if supabase_db_url and ("postgres" in supabase_db_url.lower()):
+            try:
+                import psycopg2
+                from psycopg2 import pool
+                from psycopg2.extras import RealDictCursor
+                
+                clean_url = supabase_db_url.strip().strip("'\"")
+                if clean_url.startswith("postgres://"):
+                    clean_url = "postgresql://" + clean_url[len("postgres://"):]
+                if "sslmode=" not in clean_url:
+                    clean_url += ("&" if "?" in clean_url else "?") + "sslmode=require"
+                
+                logger.info("Connecting to Supabase Cloud PostgreSQL database...")
+                self.pg_pool = pool.ThreadedConnectionPool(
+                    minconn=1,
+                    maxconn=10,
+                    dsn=clean_url
+                )
+                self.is_postgres = True
+                self._init_postgres()
+                logger.info("Connected successfully to Supabase Cloud PostgreSQL!")
+                return
+            except Exception as e:
+                logger.warning("Supabase PostgreSQL connection failed: %s. Falling back to local storage.", e)
+                self.is_postgres = False
+                self.pg_pool = None
 
-        # Fallback to SQLite
+        # 2. Check for MongoDB if configured
+        is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+        if not is_serverless or settings.MONGODB_URI != "mongodb://localhost:27017":
+            try:
+                import pymongo
+                timeout = 500 if is_serverless else 2000
+                client = pymongo.MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=timeout)
+                client.admin.command('ping')
+                self.mongo_client = client
+                self.mongo_db = client[settings.DATABASE_NAME]
+                self.is_mongodb = True
+                logger.info("Connected successfully to MongoDB at %s", settings.MONGODB_URI)
+                self._ensure_mongo_indexes()
+                return
+            except Exception as e:
+                logger.warning("MongoDB unavailable (%s). Falling back to persistent SQLite storage.", e)
+
+        # 3. Fallback to SQLite
+        self.is_postgres = False
         self.is_mongodb = False
         self._init_sqlite()
+
+    @contextmanager
+    def _pg_cursor(self):
+        """Context manager for thread-safe Supabase PostgreSQL queries."""
+        conn = self.pg_pool.getconn()
+        try:
+            from psycopg2.extras import RealDictCursor
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                yield cur
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            self.pg_pool.putconn(conn)
+
+    def _query_one(self, sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
+        """Unified single row query across Supabase PostgreSQL and SQLite."""
+        if self.is_postgres:
+            pg_sql = sql.replace("?", "%s")
+            with self._pg_cursor() as cur:
+                cur.execute(pg_sql, params)
+                row = cur.fetchone()
+                return dict(row) if row else None
+        else:
+            conn = sqlite3.connect(self.sqlite_path)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            conn.close()
+            return dict(row) if row else None
+
+    def _query_all(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
+        """Unified multiple row query across Supabase PostgreSQL and SQLite."""
+        if self.is_postgres:
+            pg_sql = sql.replace("?", "%s")
+            with self._pg_cursor() as cur:
+                cur.execute(pg_sql, params)
+                return [dict(r) for r in cur.fetchall()]
+        else:
+            conn = sqlite3.connect(self.sqlite_path)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            rows = [dict(r) for r in cur.fetchall()]
+            conn.close()
+            return rows
+
+    def _execute(self, sql: str, params: tuple = ()) -> int:
+        """Unified mutation execution across Supabase PostgreSQL and SQLite."""
+        if self.is_postgres:
+            pg_sql = sql.replace("?", "%s")
+            if "INSERT OR IGNORE INTO" in pg_sql:
+                pg_sql = pg_sql.replace("INSERT OR IGNORE INTO", "INSERT INTO")
+                if "ON CONFLICT" not in pg_sql:
+                    pg_sql += " ON CONFLICT DO NOTHING"
+            with self._pg_cursor() as cur:
+                cur.execute(pg_sql, params)
+                return cur.rowcount
+        else:
+            conn = sqlite3.connect(self.sqlite_path)
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            conn.commit()
+            affected = cur.rowcount
+            conn.close()
+            return affected
+
+    def _init_postgres(self):
+        """Initializes Supabase Cloud PostgreSQL tables, indexes, and default records."""
+        with self._pg_cursor() as cur:
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                full_name TEXT,
+                organization TEXT,
+                hashed_password TEXT NOT NULL,
+                role TEXT DEFAULT 'owner',
+                created_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS websites (
+                id TEXT PRIMARY KEY,
+                site_id TEXT UNIQUE NOT NULL,
+                site_key TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                domain TEXT NOT NULL,
+                user_id TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TEXT,
+                secret_key TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                session_id TEXT PRIMARY KEY,
+                site_key TEXT NOT NULL,
+                visitor_id TEXT,
+                ip TEXT,
+                user_agent TEXT,
+                category TEXT DEFAULT 'unknown',
+                risk_score REAL DEFAULT 0.0,
+                risk_level TEXT DEFAULT 'low',
+                enforcement TEXT DEFAULT 'allow',
+                first_seen TEXT,
+                last_seen TEXT,
+                event_count INTEGER DEFAULT 1,
+                reasons TEXT,
+                metrics TEXT,
+                coordinates TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS events (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                site_key TEXT,
+                event_type TEXT NOT NULL,
+                url TEXT,
+                timestamp BIGINT NOT NULL,
+                sequence_num INTEGER DEFAULT 1,
+                payload TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS threats (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                site_key TEXT,
+                title TEXT NOT NULL,
+                category TEXT DEFAULT 'Automated Threat',
+                severity TEXT DEFAULT 'high',
+                status TEXT DEFAULT 'new',
+                detected_at TEXT,
+                details TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS enforcement_feedback (
+                id TEXT PRIMARY KEY,
+                decision_id TEXT,
+                site_id TEXT,
+                session_id TEXT,
+                action TEXT,
+                endpoint TEXT,
+                result TEXT,
+                http_status INTEGER DEFAULT 200,
+                received_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS pow_challenges (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                challenge_id TEXT,
+                difficulty INTEGER DEFAULT 3,
+                nonce INTEGER,
+                time_taken_ms REAL,
+                status TEXT DEFAULT 'verified',
+                resolved_at TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_events_session_ts ON events (session_id, timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_events_site_ts ON events (site_key, timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_sessions_site_last ON sessions (site_key, last_seen DESC);
+            CREATE INDEX IF NOT EXISTS idx_threats_site_det ON threats (site_key, detected_at DESC);
+            """)
+
+            # Seed default SOC analyst if fresh
+            try:
+                cur.execute("SELECT id FROM users WHERE email = 'analyst@botpulse.io'")
+                if not cur.fetchone():
+                    from backend.core.security import hash_password
+                    cur.execute("""
+                    INSERT INTO users (id, email, full_name, organization, hashed_password, role, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (email) DO NOTHING
+                    """, (
+                        "usr_seed_analyst",
+                        "analyst@botpulse.io",
+                        "Alexander Wright",
+                        "BotPulse Cyber Labs",
+                        hash_password("botpulse2026!"),
+                        "owner",
+                        datetime.utcnow().isoformat()
+                    ))
+            except Exception as seed_err:
+                logger.warning("Could not seed default analyst in Supabase: %s", seed_err)
+
+            # Seed default protected site if fresh
+            try:
+                cur.execute("SELECT id FROM websites WHERE site_id = %s", (settings.DEFAULT_SITE_ID,))
+                if not cur.fetchone():
+                    cur.execute("""
+                    INSERT INTO websites (id, site_id, site_key, name, domain, user_id, status, created_at, secret_key)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (site_key) DO NOTHING
+                    """, (
+                        "site_seed_alvera",
+                        settings.DEFAULT_SITE_ID,
+                        settings.DEFAULT_SITE_KEY,
+                        settings.DEFAULT_SITE_NAME,
+                        settings.DEFAULT_SITE_DOMAIN,
+                        "usr_seed_analyst",
+                        "active",
+                        datetime.utcnow().isoformat(),
+                        "bp_sec_alvera_live_9f8e7d6c5b4a3"
+                    ))
+            except Exception as site_seed_err:
+                logger.warning("Could not seed default site in Supabase: %s", site_seed_err)
+
+        logger.info("Supabase PostgreSQL tables and indexes ready.")
 
     def _ensure_mongo_indexes(self):
         try:
@@ -220,13 +459,7 @@ class DatabaseManager:
         if self.is_mongodb:
             return self.mongo_db.users.find_one({"email": email})
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM users WHERE email = ?", (email,))
-            row = cur.fetchone()
-            conn.close()
-            return dict(row) if row else None
+            return self._query_one("SELECT * FROM users WHERE email = ?", (email,))
 
     def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         user_data["email"] = user_data["email"].lower().strip()
@@ -235,12 +468,16 @@ class DatabaseManager:
             self.mongo_db.users.insert_one(user_data)
             return user_data
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
-            cur.execute("""
+            sql = """
             INSERT INTO users (id, email, full_name, organization, hashed_password, role, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
+            ON CONFLICT (email) DO UPDATE SET
+                full_name = EXCLUDED.full_name,
+                organization = EXCLUDED.organization,
+                hashed_password = EXCLUDED.hashed_password,
+                role = EXCLUDED.role
+            """
+            self._execute(sql, (
                 user_data["id"],
                 user_data["email"],
                 user_data.get("full_name", ""),
@@ -249,8 +486,6 @@ class DatabaseManager:
                 user_data.get("role", "owner"),
                 user_data["created_at"]
             ))
-            conn.commit()
-            conn.close()
             return user_data
 
     # --------------------------------------------------------------------------
@@ -260,13 +495,7 @@ class DatabaseManager:
         if self.is_mongodb:
             return self.mongo_db.websites.find_one({"site_key": site_key})
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM websites WHERE site_key = ? OR site_id = ?", (site_key, site_key))
-            row = cur.fetchone()
-            conn.close()
-            return dict(row) if row else None
+            return self._query_one("SELECT * FROM websites WHERE site_key = ? OR site_id = ?", (site_key, site_key))
 
     def get_website_by_domain(self, domain_or_key: str) -> Optional[Dict[str, Any]]:
         if not domain_or_key:
@@ -278,36 +507,22 @@ class DatabaseManager:
                 doc = self.mongo_db.websites.find_one({"site_id": settings.DEFAULT_SITE_ID})
             return doc
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM websites WHERE domain = ? OR domain = ? OR domain = 'elvara.store' OR domain = 'elvara-fashion.vercel.app' OR site_key = ? OR site_id = ?",
-                (domain_or_key, clean, domain_or_key, domain_or_key)
-            )
-            rows = cur.fetchall()
-            conn.close()
+            sql = "SELECT * FROM websites WHERE domain = ? OR domain = ? OR domain = 'elvara.store' OR domain = 'elvara-fashion.vercel.app' OR site_key = ? OR site_id = ?"
+            rows = self._query_all(sql, (domain_or_key, clean, domain_or_key, domain_or_key))
             for r in rows:
-                rd = dict(r)
-                if rd.get("domain") in (domain_or_key, clean) or rd.get("site_key") == domain_or_key:
-                    return rd
+                if r.get("domain") in (domain_or_key, clean) or r.get("site_key") == domain_or_key:
+                    return r
             if "elvara" in clean:
                 for r in rows:
-                    if r["site_id"] == settings.DEFAULT_SITE_ID:
-                        return dict(r)
-            return dict(rows[0]) if rows else None
+                    if r.get("site_id") == settings.DEFAULT_SITE_ID:
+                        return r
+            return rows[0] if rows else None
 
     def get_websites_by_user(self, user_id: str) -> List[Dict[str, Any]]:
         if self.is_mongodb:
             return list(self.mongo_db.websites.find({"user_id": user_id}, {"_id": 0}))
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM websites WHERE user_id = ?", (user_id,))
-            rows = [dict(r) for r in cur.fetchall()]
-            conn.close()
-            return rows
+            return self._query_all("SELECT * FROM websites WHERE user_id = ?", (user_id,))
 
     def create_website(self, site_data: Dict[str, Any]) -> Dict[str, Any]:
         site_data["created_at"] = datetime.utcnow().isoformat()
@@ -315,12 +530,15 @@ class DatabaseManager:
             self.mongo_db.websites.insert_one(site_data)
             return site_data
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
-            cur.execute("""
+            sql = """
             INSERT INTO websites (id, site_id, site_key, name, domain, user_id, status, created_at, secret_key)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            ON CONFLICT (site_key) DO UPDATE SET
+                name = EXCLUDED.name,
+                domain = EXCLUDED.domain,
+                status = EXCLUDED.status
+            """
+            self._execute(sql, (
                 site_data["id"],
                 site_data["site_id"],
                 site_data["site_key"],
@@ -331,8 +549,6 @@ class DatabaseManager:
                 site_data["created_at"],
                 site_data.get("secret_key", "")
             ))
-            conn.commit()
-            conn.close()
             return site_data
 
     def delete_website(self, site_id: str, user_id: str) -> bool:
@@ -340,12 +556,7 @@ class DatabaseManager:
             res = self.mongo_db.websites.delete_one({"site_id": site_id, "user_id": user_id})
             return res.deleted_count > 0
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
-            cur.execute("DELETE FROM websites WHERE site_id = ? AND user_id = ?", (site_id, user_id))
-            affected = cur.rowcount
-            conn.commit()
-            conn.close()
+            affected = self._execute("DELETE FROM websites WHERE site_id = ? AND user_id = ?", (site_id, user_id))
             return affected > 0
 
     # --------------------------------------------------------------------------
@@ -355,19 +566,13 @@ class DatabaseManager:
         if self.is_mongodb:
             return self.mongo_db.sessions.find_one({"session_id": session_id}, {"_id": 0})
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,))
-            row = cur.fetchone()
-            conn.close()
+            row = self._query_one("SELECT * FROM sessions WHERE session_id = ?", (session_id,))
             if not row:
                 return None
-            data = dict(row)
-            data["reasons"] = json.loads(data["reasons"]) if data.get("reasons") else []
-            data["metrics"] = json.loads(data["metrics"]) if data.get("metrics") else {}
-            data["coordinates"] = json.loads(data["coordinates"]) if data.get("coordinates") else []
-            return data
+            row["reasons"] = json.loads(row["reasons"]) if row.get("reasons") and isinstance(row["reasons"], str) else (row.get("reasons") or [])
+            row["metrics"] = json.loads(row["metrics"]) if row.get("metrics") and isinstance(row["metrics"], str) else (row.get("metrics") or {})
+            row["coordinates"] = json.loads(row["coordinates"]) if row.get("coordinates") and isinstance(row["coordinates"], str) else (row.get("coordinates") or [])
+            return row
 
     def save_session(self, session_data: Dict[str, Any]):
         if self.is_mongodb:
@@ -377,28 +582,27 @@ class DatabaseManager:
                 upsert=True
             )
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
             reasons_json = json.dumps(session_data.get("reasons", []))
             metrics_json = json.dumps(session_data.get("metrics", {}))
             coords_json = json.dumps(session_data.get("coordinates", []))
-            cur.execute("""
+            sql = """
             INSERT INTO sessions (
                 session_id, site_key, visitor_id, ip, user_agent, category,
                 risk_score, risk_level, enforcement, first_seen, last_seen,
                 event_count, reasons, metrics, coordinates
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
-                category = excluded.category,
-                risk_score = excluded.risk_score,
-                risk_level = excluded.risk_level,
-                enforcement = excluded.enforcement,
-                last_seen = excluded.last_seen,
-                event_count = excluded.event_count,
-                reasons = excluded.reasons,
-                metrics = excluded.metrics,
-                coordinates = excluded.coordinates
-            """, (
+                category = EXCLUDED.category,
+                risk_score = EXCLUDED.risk_score,
+                risk_level = EXCLUDED.risk_level,
+                enforcement = EXCLUDED.enforcement,
+                last_seen = EXCLUDED.last_seen,
+                event_count = EXCLUDED.event_count,
+                reasons = EXCLUDED.reasons,
+                metrics = EXCLUDED.metrics,
+                coordinates = EXCLUDED.coordinates
+            """
+            self._execute(sql, (
                 session_data["session_id"],
                 session_data.get("site_key", ""),
                 session_data.get("visitor_id", ""),
@@ -415,8 +619,6 @@ class DatabaseManager:
                 metrics_json,
                 coords_json
             ))
-            conn.commit()
-            conn.close()
 
     def get_sessions_list(self, site_key: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         if self.is_mongodb:
@@ -424,22 +626,18 @@ class DatabaseManager:
             cursor = self.mongo_db.sessions.find(query, {"_id": 0}).sort("last_seen", -1).limit(limit)
             return list(cursor)
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
             if site_key and site_key != "all":
-                cur.execute("SELECT * FROM sessions WHERE site_key = ? ORDER BY last_seen DESC LIMIT ?", (site_key, limit))
+                rows = self._query_all("SELECT * FROM sessions WHERE site_key = ? ORDER BY last_seen DESC LIMIT ?", (site_key, limit))
             else:
-                cur.execute("SELECT * FROM sessions ORDER BY last_seen DESC LIMIT ?", (limit,))
-            rows = []
-            for r in cur.fetchall():
+                rows = self._query_all("SELECT * FROM sessions ORDER BY last_seen DESC LIMIT ?", (limit,))
+            result = []
+            for r in rows:
                 d = dict(r)
-                d["reasons"] = json.loads(d["reasons"]) if d.get("reasons") else []
-                d["metrics"] = json.loads(d["metrics"]) if d.get("metrics") else {}
-                d["coordinates"] = json.loads(d["coordinates"]) if d.get("coordinates") else []
-                rows.append(d)
-            conn.close()
-            return rows
+                d["reasons"] = json.loads(d["reasons"]) if d.get("reasons") and isinstance(d["reasons"], str) else (d.get("reasons") or [])
+                d["metrics"] = json.loads(d["metrics"]) if d.get("metrics") and isinstance(d["metrics"], str) else (d.get("metrics") or {})
+                d["coordinates"] = json.loads(d["coordinates"]) if d.get("coordinates") and isinstance(d["coordinates"], str) else (d.get("coordinates") or [])
+                result.append(d)
+            return result
 
     # --------------------------------------------------------------------------
     # Events Repository
@@ -450,25 +648,23 @@ class DatabaseManager:
         if self.is_mongodb:
             self.mongo_db.events.insert_many(events)
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
+            sql = """
+            INSERT INTO events (id, session_id, site_key, event_type, url, timestamp, sequence_num, payload)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (id) DO NOTHING
+            """
             for ev in events:
                 payload_json = json.dumps(ev.get("payload", {}))
-                cur.execute("""
-                INSERT OR IGNORE INTO events (id, session_id, site_key, event_type, url, timestamp, sequence_num, payload)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
+                self._execute(sql, (
                     ev.get("id", f"evt_{ev.get('timestamp')}_{ev.get('sequence_num')}"),
                     ev.get("session_id"),
                     ev.get("site_key"),
                     ev.get("event_type"),
                     ev.get("url"),
                     ev.get("timestamp"),
-                    ev.get("sequence_num"),
+                    ev.get("sequence_num", 1),
                     payload_json
                 ))
-            conn.commit()
-            conn.close()
 
     def get_recent_events(self, site_key: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         if self.is_mongodb:
@@ -485,9 +681,6 @@ class DatabaseManager:
                     ev["reasons"] = sess.get("reasons", [])
             return events
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
             query = """
             SELECT 
                 e.id, e.session_id, e.site_key, e.event_type, e.url, e.timestamp, e.sequence_num, e.payload,
@@ -502,20 +695,19 @@ class DatabaseManager:
             query += " ORDER BY e.timestamp DESC LIMIT ?"
             params.append(limit)
             
-            cur.execute(query, tuple(params))
-            rows = []
-            for r in cur.fetchall():
+            rows = self._query_all(query, tuple(params))
+            result = []
+            for r in rows:
                 d = dict(r)
-                d["payload"] = json.loads(d["payload"]) if d.get("payload") else {}
-                d["reasons"] = json.loads(d["reasons"]) if d.get("reasons") else []
+                d["payload"] = json.loads(d["payload"]) if d.get("payload") and isinstance(d["payload"], str) else (d.get("payload") or {})
+                d["reasons"] = json.loads(d["reasons"]) if d.get("reasons") and isinstance(d["reasons"], str) else (d.get("reasons") or [])
                 d["ip"] = d.get("ip") or "127.0.0.1"
                 d["category"] = d.get("category") or "human"
                 d["risk_score"] = d.get("risk_score") if d.get("risk_score") is not None else 0.0
                 d["risk_level"] = d.get("risk_level") or "low"
                 d["enforcement"] = d.get("enforcement") or "allow"
-                rows.append(d)
-            conn.close()
-            return rows
+                result.append(d)
+            return result
 
     # --------------------------------------------------------------------------
     # Threats Repository
@@ -524,12 +716,14 @@ class DatabaseManager:
         if self.is_mongodb:
             self.mongo_db.threats.insert_one(threat_data)
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
-            cur.execute("""
+            sql = """
             INSERT INTO threats (id, session_id, site_key, title, category, severity, status, detected_at, details)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            ON CONFLICT (id) DO UPDATE SET
+                status = EXCLUDED.status,
+                details = EXCLUDED.details
+            """
+            self._execute(sql, (
                 threat_data["id"],
                 threat_data.get("session_id", ""),
                 threat_data.get("site_key", ""),
@@ -540,37 +734,24 @@ class DatabaseManager:
                 threat_data.get("detected_at", datetime.utcnow().isoformat()),
                 threat_data.get("details", "")
             ))
-            conn.commit()
-            conn.close()
 
     def get_threats_list(self, site_key: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         if self.is_mongodb:
             query = {"site_key": site_key} if site_key and site_key != "all" else {}
             return list(self.mongo_db.threats.find(query, {"_id": 0}).sort("detected_at", -1).limit(limit))
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
             if site_key and site_key != "all":
-                cur.execute("SELECT * FROM threats WHERE site_key = ? ORDER BY detected_at DESC LIMIT ?", (site_key, limit))
+                return self._query_all("SELECT * FROM threats WHERE site_key = ? ORDER BY detected_at DESC LIMIT ?", (site_key, limit))
             else:
-                cur.execute("SELECT * FROM threats ORDER BY detected_at DESC LIMIT ?", (limit,))
-            rows = [dict(r) for r in cur.fetchall()]
-            conn.close()
-            return rows
+                return self._query_all("SELECT * FROM threats ORDER BY detected_at DESC LIMIT ?", (limit,))
 
     def update_threat_status(self, threat_id: str, new_status: str) -> bool:
         if self.is_mongodb:
             res = self.mongo_db.threats.update_one({"id": threat_id}, {"$set": {"status": new_status}})
             return res.modified_count > 0
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
-            cur.execute("UPDATE threats SET status = ? WHERE id = ?", (new_status, threat_id))
-            conn.commit()
-            updated = cur.rowcount > 0
-            conn.close()
-            return updated
+            affected = self._execute("UPDATE threats SET status = ? WHERE id = ?", (new_status, threat_id))
+            return affected > 0
 
     # --------------------------------------------------------------------------
     # Enforcement Feedback Repository
@@ -580,12 +761,12 @@ class DatabaseManager:
         if self.is_mongodb:
             self.mongo_db.enforcement_feedback.insert_one(data)
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
-            cur.execute("""
+            sql = """
             INSERT INTO enforcement_feedback (id, decision_id, site_id, session_id, action, endpoint, result, http_status, received_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            ON CONFLICT (id) DO NOTHING
+            """
+            self._execute(sql, (
                 data.get("id", f"fb_{datetime.utcnow().timestamp()}"),
                 data.get("decision_id", ""),
                 data.get("site_id", ""),
@@ -596,8 +777,6 @@ class DatabaseManager:
                 data.get("http_status", 200),
                 data["received_at"]
             ))
-            conn.commit()
-            conn.close()
 
     # --------------------------------------------------------------------------
     # Strict Zero-State Statistics Aggregation
@@ -605,33 +784,18 @@ class DatabaseManager:
     def get_dashboard_stats(self, site_key: Optional[str] = None, time_range: Optional[str] = None) -> Dict[str, Any]:
         """
         Aggregates live counts strictly from real database records.
-        Supports time_range: '24h', '7d', '30d', or 'all'.
-        Returns strictly calculated, exact figures for sessions, requests,
-        behavioral metrics, traffic trend, and top active pages.
+        Supports Supabase Cloud PostgreSQL, MongoDB, and SQLite.
         """
         if self.is_mongodb:
             query = {"site_key": site_key} if site_key and site_key != "all" else {}
             total_sessions = self.mongo_db.sessions.count_documents(query)
             if total_sessions == 0:
                 return {
-                    "total_requests": 0,
-                    "total_sessions": 0,
-                    "human_count": 0,
-                    "traditional_bot_count": 0,
-                    "advanced_bot_count": 0,
-                    "ai_agent_count": 0,
-                    "threat_count": 0,
-                    "prevention_actions": 0,
-                    "avg_risk_score": 0.0,
-                    "mitigation_rate": "0.0%",
-                    "traffic_trend": [],
-                    "top_pages": [],
-                    "behavioral_metrics": {
-                        "human_entropy": 0.88,
-                        "bot_jitter": 0.02,
-                        "ai_attribution": "RAD-S1 Active",
-                        "active_agents": 0
-                    }
+                    "total_requests": 0, "total_sessions": 0, "human_count": 0,
+                    "traditional_bot_count": 0, "advanced_bot_count": 0, "ai_agent_count": 0,
+                    "threat_count": 0, "prevention_actions": 0, "avg_risk_score": 0.0,
+                    "mitigation_rate": "0.0%", "traffic_trend": [], "top_pages": [],
+                    "behavioral_metrics": {"human_entropy": 0.88, "bot_jitter": 0.02, "ai_attribution": "RAD-S1 Active", "active_agents": 0}
                 }
             
             human = self.mongo_db.sessions.count_documents({**query, "category": "human"})
@@ -642,10 +806,7 @@ class DatabaseManager:
             prevented = self.mongo_db.sessions.count_documents({**query, "enforcement": {"$in": ["block", "verify", "rate_limit"]}})
             total_reqs = self.mongo_db.events.count_documents(query)
             
-            pipeline = [
-                {"$match": query},
-                {"$group": {"_id": None, "avg_score": {"$avg": "$risk_score"}}}
-            ]
+            pipeline = [{"$match": query}, {"$group": {"_id": None, "avg_score": {"$avg": "$risk_score"}}}]
             agg_res = list(self.mongo_db.sessions.aggregate(pipeline))
             avg_risk = round(agg_res[0]["avg_score"], 1) if agg_res and agg_res[0].get("avg_score") is not None else 0.0
 
@@ -681,30 +842,13 @@ class DatabaseManager:
             rate = f"{round((prevented / max(1, non_human)) * 100, 1)}%" if non_human > 0 else "100.0%"
 
             return {
-                "total_requests": total_reqs,
-                "total_sessions": total_sessions,
-                "human_count": human,
-                "traditional_bot_count": trad_bot,
-                "advanced_bot_count": adv_bot,
-                "ai_agent_count": ai_agent,
-                "threat_count": threats,
-                "prevention_actions": prevented,
-                "avg_risk_score": avg_risk,
-                "mitigation_rate": rate,
-                "traffic_trend": traffic_trend,
-                "top_pages": [],
-                "behavioral_metrics": {
-                    "human_entropy": 0.88,
-                    "bot_jitter": 0.02,
-                    "ai_attribution": "RAD-S1 Active",
-                    "active_agents": ai_agent
-                }
+                "total_requests": total_reqs, "total_sessions": total_sessions, "human_count": human,
+                "traditional_bot_count": trad_bot, "advanced_bot_count": adv_bot, "ai_agent_count": ai_agent,
+                "threat_count": threats, "prevention_actions": prevented, "avg_risk_score": avg_risk,
+                "mitigation_rate": rate, "traffic_trend": traffic_trend, "top_pages": [],
+                "behavioral_metrics": {"human_entropy": 0.88, "bot_jitter": 0.02, "ai_attribution": "RAD-S1 Active", "active_agents": ai_agent}
             }
         else:
-            conn = sqlite3.connect(self.sqlite_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            
             # Resolve site_key if it's a domain name
             target_key = site_key
             if site_key and site_key != "all":
@@ -716,8 +860,7 @@ class DatabaseManager:
             cutoff_ms = 0
             cutoff_iso = None
             if time_range and time_range != "all":
-                cur.execute("SELECT MAX(timestamp) as max_ts FROM events")
-                row = cur.fetchone()
+                row = self._query_one("SELECT MAX(timestamp) as max_ts FROM events")
                 max_ts = row["max_ts"] if row and row["max_ts"] else int(datetime.utcnow().timestamp() * 1000)
                 if time_range == "24h":
                     cutoff_ms = max_ts - 24 * 3600 * 1000
@@ -738,8 +881,8 @@ class DatabaseManager:
             
             sess_where = ("WHERE " + " AND ".join(sess_conditions)) if sess_conditions else ""
             
-            cur.execute(f"SELECT COUNT(*) as count FROM sessions {sess_where}", sess_params)
-            total_sessions = cur.fetchone()["count"]
+            sess_row = self._query_one(f"SELECT COUNT(*) as count FROM sessions {sess_where}", tuple(sess_params))
+            total_sessions = sess_row["count"] if sess_row else 0
 
             ev_conditions = []
             ev_params = []
@@ -753,38 +896,24 @@ class DatabaseManager:
             ev_where = ("WHERE " + " AND ".join(ev_conditions)) if ev_conditions else ""
             
             if total_sessions == 0 and not sess_where:
-                conn.close()
                 return {
-                    "total_requests": 0,
-                    "total_sessions": 0,
-                    "human_count": 0,
-                    "traditional_bot_count": 0,
-                    "advanced_bot_count": 0,
-                    "ai_agent_count": 0,
-                    "threat_count": 0,
-                    "prevention_actions": 0,
-                    "avg_risk_score": 0.0,
-                    "mitigation_rate": "0.0%",
-                    "traffic_trend": [],
-                    "top_pages": [],
-                    "behavioral_metrics": {
-                        "human_entropy": 0.88,
-                        "bot_jitter": 0.02,
-                        "ai_attribution": "RAD-S1 Active",
-                        "active_agents": 0
-                    }
+                    "total_requests": 0, "total_sessions": 0, "human_count": 0,
+                    "traditional_bot_count": 0, "advanced_bot_count": 0, "ai_agent_count": 0,
+                    "threat_count": 0, "prevention_actions": 0, "avg_risk_score": 0.0,
+                    "mitigation_rate": "0.0%", "traffic_trend": [], "top_pages": [],
+                    "behavioral_metrics": {"human_entropy": 0.88, "bot_jitter": 0.02, "ai_attribution": "RAD-S1 Active", "active_agents": 0}
                 }
             
             ev_count_where = ("WHERE " + " AND ".join(["site_key = ?" if c.startswith("e.site_key") else c.replace("e.", "") for c in ev_conditions])) if ev_conditions else ""
-            cur.execute(f"SELECT COUNT(*) as count FROM events {ev_count_where}", ev_params)
-            total_reqs = cur.fetchone()["count"]
+            req_row = self._query_one(f"SELECT COUNT(*) as count FROM events {ev_count_where}", tuple(ev_params))
+            total_reqs = req_row["count"] if req_row else 0
 
             def count_sess_cat(cat_name):
                 conds = list(sess_conditions) + ["category = ?"]
                 params_list = list(sess_params) + [cat_name]
                 w = "WHERE " + " AND ".join(conds)
-                cur.execute(f"SELECT COUNT(*) as count FROM sessions {w}", params_list)
-                return cur.fetchone()["count"]
+                res = self._query_one(f"SELECT COUNT(*) as count FROM sessions {w}", tuple(params_list))
+                return res["count"] if res else 0
 
             human = count_sess_cat("human")
             trad_bot = count_sess_cat("traditional_bot")
@@ -797,23 +926,21 @@ class DatabaseManager:
                 thr_conditions.append("site_key = ?")
                 thr_params.append(target_key)
             thr_where = ("WHERE " + " AND ".join(thr_conditions)) if thr_conditions else ""
-            cur.execute(f"SELECT COUNT(*) as count FROM threats {thr_where}", thr_params)
-            threats = cur.fetchone()["count"]
+            thr_row = self._query_one(f"SELECT COUNT(*) as count FROM threats {thr_where}", tuple(thr_params))
+            threats = thr_row["count"] if thr_row else 0
 
             prev_conds = list(sess_conditions) + ["enforcement IN ('block', 'verify', 'rate_limit')"]
             w_prev = "WHERE " + " AND ".join(prev_conds)
-            cur.execute(f"SELECT COUNT(*) as count FROM sessions {w_prev}", sess_params)
-            prevented = cur.fetchone()["count"]
+            prev_row = self._query_one(f"SELECT COUNT(*) as count FROM sessions {w_prev}", tuple(sess_params))
+            prevented = prev_row["count"] if prev_row else 0
 
-            cur.execute(f"SELECT AVG(risk_score) as avg_score FROM sessions {sess_where}", sess_params)
-            avg_row = cur.fetchone()
+            avg_row = self._query_one(f"SELECT AVG(risk_score) as avg_score FROM sessions {sess_where}", tuple(sess_params))
             avg_risk = round(avg_row["avg_score"], 1) if avg_row and avg_row["avg_score"] is not None else 0.0
 
-            # Chronological traffic trend with continuous intervals and local timestamp
             interval_ms = 3600 * 1000 if (time_range in (None, "24h")) else 86400 * 1000
             is_hourly = (time_range in (None, "24h"))
 
-            cur.execute(f"""
+            trend_sql = f"""
             SELECT 
                 (e.timestamp / {interval_ms}) * {interval_ms} as bucket_ts,
                 COUNT(DISTINCT e.session_id) as total_sessions,
@@ -827,11 +954,11 @@ class DatabaseManager:
             FROM events e
             LEFT JOIN sessions s ON e.session_id = s.session_id
             {ev_where}
-            GROUP BY bucket_ts
-            ORDER BY bucket_ts ASC
-            """, ev_params)
+            GROUP BY 1
+            ORDER BY 1 ASC
+            """
+            rows = self._query_all(trend_sql, tuple(ev_params))
 
-            rows = cur.fetchall()
             trend_buckets = {}
             for r in rows:
                 b_ts = r["bucket_ts"]
@@ -854,7 +981,6 @@ class DatabaseManager:
                     "agent_requests": r["agent_requests"] or 0
                 }
 
-            # Fill missing continuous intervals so lines connect smoothly without awkward jumps
             if trend_buckets:
                 min_b = min(trend_buckets.keys())
                 max_b = max(trend_buckets.keys())
@@ -876,16 +1002,17 @@ class DatabaseManager:
 
             traffic_trend = sorted(trend_buckets.values(), key=lambda x: x["timestamp"])
 
-            # Real Top Active Pages from actual events
-            cur.execute(f"""
+            # Top Active Pages
+            pages_sql = f"""
             SELECT e.url, s.category
             FROM events e
             LEFT JOIN sessions s ON e.session_id = s.session_id
             {ev_where}
-            """, ev_params)
+            """
+            page_rows = self._query_all(pages_sql, tuple(ev_params))
 
             pages_map = {}
-            for r in cur.fetchall():
+            for r in page_rows:
                 url = r["url"] or "/"
                 cat = r["category"] or "human"
                 try:
@@ -911,11 +1038,11 @@ class DatabaseManager:
 
             top_pages = sorted(pages_map.values(), key=lambda x: x["count"], reverse=True)[:10]
 
-            # Real Behavioral Metrics from sessions
-            cur.execute(f"SELECT category, metrics FROM sessions {sess_where}", sess_params)
+            # Behavioral Metrics
+            sess_metrics_rows = self._query_all(f"SELECT category, metrics FROM sessions {sess_where}", tuple(sess_params))
             human_stds = []
             bot_stds = []
-            for r in cur.fetchall():
+            for r in sess_metrics_rows:
                 cat = r["category"]
                 m_str = r["metrics"]
                 if m_str:
@@ -948,8 +1075,6 @@ class DatabaseManager:
                 "active_agents": ai_agent
             }
 
-            conn.close()
-            
             non_human = total_sessions - human
             rate = f"{round((prevented / max(1, non_human)) * 100, 1)}%" if non_human > 0 else "100.0%"
             
@@ -972,28 +1097,21 @@ class DatabaseManager:
     def record_pow_event(self, session_id: str, challenge_id: str, difficulty: int, nonce: int, time_taken_ms: float, status: str = "verified"):
         """Records a completed client-side Proof-of-Work hardware integrity challenge."""
         if not self.is_mongodb:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
             record_id = f"pow_rec_{uuid.uuid4().hex[:10]}"
-            cur.execute("""
+            sql = """
             INSERT INTO pow_challenges (id, session_id, challenge_id, difficulty, nonce, time_taken_ms, status, resolved_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (record_id, session_id, challenge_id, difficulty, nonce, time_taken_ms, status, datetime.utcnow().isoformat()))
-            conn.commit()
-            conn.close()
+            """
+            self._execute(sql, (record_id, session_id, challenge_id, difficulty, nonce, time_taken_ms, status, datetime.utcnow().isoformat()))
             return record_id
         return None
 
     def get_pow_stats(self) -> Dict[str, Any]:
         """Retrieves aggregated statistics for cryptographic Proof-of-Work challenges."""
         if not self.is_mongodb:
-            conn = sqlite3.connect(self.sqlite_path)
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*), AVG(time_taken_ms) FROM pow_challenges WHERE status = 'verified'")
-            row = cur.fetchone()
-            count = row[0] if row else 0
-            avg_time = round(row[1], 2) if row and row[1] else 0.0
-            conn.close()
+            row = self._query_one("SELECT COUNT(*) as count, AVG(time_taken_ms) as avg_time FROM pow_challenges WHERE status = 'verified'")
+            count = row["count"] if row and row.get("count") else 0
+            avg_time = round(row["avg_time"], 2) if row and row.get("avg_time") else 0.0
             return {
                 "total_solved": count,
                 "avg_solve_time_ms": avg_time,

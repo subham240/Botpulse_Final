@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     MONGODB_URI: str = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
     DATABASE_NAME: str = "botpulse"
     DATA_DIR: str = os.getenv("DATA_DIR", "/tmp" if os.environ.get("VERCEL") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
+    
+    # Supabase / PostgreSQL Cloud Database Configuration
+    SUPABASE_DB_URL: Optional[str] = os.getenv("SUPABASE_DB_URL", os.getenv("DATABASE_URL"))
+    SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY: Optional[str] = os.getenv("SUPABASE_KEY")
     
     # Model storage path
     MODELS_DIR: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
