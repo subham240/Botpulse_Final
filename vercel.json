@@ -5,15 +5,27 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://ridge-xhtml-acc-bali.trycloudflare.com/api/v1/:path*"
+      "destination": "https://dos-profits-fires-fluid.trycloudflare.com/api/v1/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://dos-profits-fires-fluid.trycloudflare.com/api/:path*"
+    },
+    {
+      "source": "/events",
+      "destination": "https://dos-profits-fires-fluid.trycloudflare.com/api/v1/events"
+    },
+    {
+      "source": "/telemetry/:path*",
+      "destination": "https://dos-profits-fires-fluid.trycloudflare.com/api/v1/telemetry/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://ridge-xhtml-acc-bali.trycloudflare.com/health"
+      "destination": "https://dos-profits-fires-fluid.trycloudflare.com/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://ridge-xhtml-acc-bali.trycloudflare.com/botpulse.js"
+      "destination": "https://dos-profits-fires-fluid.trycloudflare.com/botpulse.js"
     },
     {
       "source": "/(.*)",

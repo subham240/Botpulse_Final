@@ -4,7 +4,7 @@
  */
 
 export function getApiBaseUrl(): string {
-  const DEFAULT_TUNNEL_API = 'https://ridge-xhtml-acc-bali.trycloudflare.com/api/v1';
+  const DEFAULT_TUNNEL_API = 'https://dos-profits-fires-fluid.trycloudflare.com/api/v1';
 
   if (typeof window !== 'undefined') {
     // 1. Explicit query param ?api=... overrides everything
