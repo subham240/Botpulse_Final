@@ -21,7 +21,8 @@ import {
   LogOut,
   Bell,
   Play,
-  ExternalLink
+  ExternalLink,
+  Sliders
 } from 'lucide-react';
 
 interface PrimaryNavItem {
@@ -53,11 +54,12 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Primary 6 Navigation Items (Requested in Section 5)
+  // Primary Navigation Items
   const primaryNavItems: PrimaryNavItem[] = [
     { label: 'Overview', path: '/app/overview', icon: LayoutDashboard },
     { label: 'Live Traffic', path: '/app/live', icon: Radio },
     { label: 'Threats', path: '/app/threats', icon: ShieldAlert },
+    { label: 'Bot Regulation', path: '/app/prevention', icon: Sliders },
     { label: 'AI Agents', path: '/app/agents', icon: Bot },
     { label: 'Websites', path: '/app/integrations', icon: Globe },
     { label: 'Analytics', path: '/app/analytics', icon: LineChart },

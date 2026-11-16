@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MOCK_AI_AGENTS } from '../../data/mockData';
 import { AIAgentRecord, EnforcementDecision } from '../../types';
 import { Badge } from '../../components/shared/Badge';
@@ -39,8 +40,17 @@ export const AIAgentActivityPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="text-xs font-mono text-[#A3ADA6]">
-          RAD-S1 Engine: <span className="text-[#43D6A0] font-semibold">Active Attribution</span>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/app/prevention"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 border border-[#43D6A0]/30 hover:border-[#43D6A0] text-xs font-mono font-semibold text-[#43D6A0] hover:text-white transition-all shadow-sm"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Manage Bot Limits & Policies</span>
+          </Link>
+          <div className="text-xs font-mono text-[#A3ADA6] hidden sm:block">
+            RAD-S1 Engine: <span className="text-[#43D6A0] font-semibold">Active Attribution</span>
+          </div>
         </div>
       </div>
 
