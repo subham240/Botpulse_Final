@@ -39,7 +39,7 @@ class RiskEngine:
         # ----------------------------------------------------------------------
         # 2. Evaluate Layer 2: LSTM Advanced Bot
         # ----------------------------------------------------------------------
-        elif l2.get("status") == "completed" and (l2.get("advanced_bot_score") or 0.0) >= 0.65:
+        elif l2.get("status") == "completed" and l2.get("advanced_bot_score") is not None and l2.get("advanced_bot_score") >= 0.65:
             visitor_category = "advanced_bot"
             adv_score = l2.get("advanced_bot_score", 0.7)
             raw_risk = 70.0 + (adv_score * 25.0)  # 70 - 95
@@ -53,7 +53,8 @@ class RiskEngine:
         elif l1.get("status") == "completed":
             if l1.get("predicted_class") == "automated_bot":
                 # If Layer 2 LSTM completed and verified natural human trajectory kinematics, override tabular false positive
-                if l2.get("status") == "completed" and (l2.get("advanced_bot_score") or 1.0) < 0.25:
+                l2_bot_score = l2.get("advanced_bot_score")
+                if l2.get("status") == "completed" and l2_bot_score is not None and l2_bot_score < 0.25:
                     visitor_category = "human"
                     confidence = l2.get("confidence") or 0.95
                     raw_risk = 8.0
