@@ -38,6 +38,45 @@ def update_env_file(public_url: str):
         f.writelines(lines)
     print(f"✓ Updated .env with VITE_API_URL={api_url}", flush=True)
 
+def update_vercel_config(public_url: str):
+    """Updates vercel.json rewrites with the active Cloudflare Tunnel endpoint."""
+    vercel_path = os.path.join(ROOT_DIR, "vercel.json")
+    if not os.path.exists(vercel_path):
+        return
+    try:
+        import json
+        with open(vercel_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        data["rewrites"] = [
+            {"source": "/api/v1/:path*", "destination": f"{public_url}/api/v1/:path*"},
+            {"source": "/health", "destination": f"{public_url}/health"},
+            {"source": "/botpulse.js", "destination": f"{public_url}/botpulse.js"},
+            {"source": "/(.*)", "destination": "/index.html"}
+        ]
+        with open(vercel_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        print(f"✓ Updated vercel.json edge rewrites with {public_url}", flush=True)
+    except Exception as e:
+        print(f"Notice: Could not update vercel.json: {e}", flush=True)
+
+def update_api_service(public_url: str):
+    """Updates DEFAULT_TUNNEL_API in src/services/api.ts."""
+    api_path = os.path.join(ROOT_DIR, "src", "services", "api.ts")
+    if not os.path.exists(api_path):
+        return
+    try:
+        with open(api_path, "r", encoding="utf-8") as f:
+            code = f.read()
+        api_url = f"{public_url}/api/v1"
+        updated = re.sub(r"const DEFAULT_TUNNEL_API = '[^']+';", f"const DEFAULT_TUNNEL_API = '{api_url}';", code)
+        if updated != code:
+            with open(api_path, "w", encoding="utf-8") as f:
+                f.write(updated)
+            print(f"✓ Updated src/services/api.ts fallback to {api_url}", flush=True)
+    except Exception as e:
+        print(f"Notice: Could not update api.ts: {e}", flush=True)
+
 def update_elvara_integration(public_url: str):
     """Updates Elvara fashion demo index.html with the active Cloudflare Tunnel endpoint."""
     elvara_index = os.path.normpath(os.path.join(ROOT_DIR, "..", "Elvara", "index.html"))
@@ -173,6 +212,8 @@ def main():
 
     # Update .env and Elvara integration
     update_env_file(public_url)
+    update_vercel_config(public_url)
+    update_api_service(public_url)
     update_elvara_integration(public_url)
 
     print("\n[3/3] Tunnel Active & Verified Healthy!", flush=True)

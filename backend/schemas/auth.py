@@ -1,5 +1,5 @@
 from pydantic import BaseModel, model_validator
-from typing import Optional
+from typing import Optional, Any
 
 class UserRegister(BaseModel):
     full_name: str
@@ -28,10 +28,10 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: str
     email: str
-    full_name: str
-    organization: str
+    full_name: Optional[str] = ""
+    organization: Optional[str] = ""
     role: str
-    created_at: str
+    created_at: Optional[Any] = ""
 
 class TokenResponse(BaseModel):
     access_token: str

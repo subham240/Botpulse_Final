@@ -4,6 +4,8 @@
  */
 
 export function getApiBaseUrl(): string {
+  const DEFAULT_TUNNEL_API = 'https://exclusively-lawyer-watch-roots.trycloudflare.com/api/v1';
+
   if (typeof window !== 'undefined') {
     // 1. Check if URL has ?api=https://... to quickly switch or set backend
     try {
@@ -15,17 +17,31 @@ export function getApiBaseUrl(): string {
         return clean;
       }
     } catch {}
+
     // 2. Check saved localStorage
     const saved = localStorage.getItem('bp_api_url');
-    if (saved) {
+    if (saved && saved.trim() !== '') {
+      // If deployed on Vercel and localStorage is pointing to unreachable 127.0.0.1 or localhost, redirect to active tunnel
+      if (
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1' &&
+        (saved.includes('127.0.0.1') || saved.includes('localhost'))
+      ) {
+        localStorage.setItem('bp_api_url', DEFAULT_TUNNEL_API);
+        return DEFAULT_TUNNEL_API;
+      }
       return saved.replace(/\/+$/, '');
     }
   }
+
   // 3. Environment variable or default
-  return (
-    ((import.meta as any).env?.VITE_API_URL as string) ||
-    ((import.meta as any).env?.PROD ? '/api/v1' : 'http://127.0.0.1:8000/api/v1')
-  ).replace(/\/+$/, '');
+  const envUrl = (import.meta as any).env?.VITE_API_URL as string;
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.replace(/\/+$/, '');
+  }
+
+  // 4. Default: active public Cloudflare tunnel
+  return DEFAULT_TUNNEL_API;
 }
 
 export interface ApiUser {

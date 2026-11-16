@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
-import { Lock, Mail, Eye, EyeOff, AlertCircle, Shield } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, Shield, Radio } from 'lucide-react';
 import { MeshGradientShader } from '../../components/shaders/MeshGradientShader';
+import { getApiBaseUrl } from '../../services/api';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('analyst@botpulse.io');
@@ -31,7 +32,13 @@ export const LoginPage: React.FC = () => {
       showToast('Authenticated', 'Welcome back to the BotPulse SOC console.', 'success');
       navigate('/app/overview');
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('fetch') || msg.includes('NetworkError')) {
+        localStorage.setItem('bp_api_url', getApiBaseUrl());
+        setError('Cannot reach backend. Reconnecting to live Cloudflare tunnel... Please click Sign In again.');
+      } else {
+        setError(msg || 'Authentication failed. Please check your credentials.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -131,6 +138,31 @@ export const LoginPage: React.FC = () => {
           <Link to="/register" className="text-[#43D6A0] font-semibold hover:underline">
             Register Workspace
           </Link>
+        </div>
+
+        {/* Live Zero-Trust Backend Tunnel Indicator */}
+        <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-[#737F77] font-mono">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#43D6A0] animate-pulse"></span>
+            <span>Live Engine</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const url = prompt(
+                'Enter Backend API Endpoint (or leave blank to use active Cloudflare Tunnel):',
+                getApiBaseUrl()
+              );
+              if (url !== null) {
+                const target = url.trim() || getApiBaseUrl();
+                localStorage.setItem('bp_api_url', target);
+                window.location.reload();
+              }
+            }}
+            className="text-[#43D6A0] hover:underline"
+          >
+            Configure Engine
+          </button>
         </div>
       </div>
     </div>

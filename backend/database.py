@@ -52,6 +52,9 @@ class DatabaseManager:
         """Attempts connection to Supabase PostgreSQL, then MongoDB; falls back to SQLite."""
         # 1. Check for Supabase Cloud PostgreSQL connection string
         supabase_db_url = settings.SUPABASE_DB_URL or os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+        if not supabase_db_url:
+            supabase_db_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require"
+
         if supabase_db_url and ("postgres" in supabase_db_url.lower()):
             try:
                 import psycopg2
@@ -63,17 +66,32 @@ class DatabaseManager:
                     clean_url = "postgresql://" + clean_url[len("postgres://"):]
                 if "sslmode=" not in clean_url:
                     clean_url += ("&" if "?" in clean_url else "?") + "sslmode=require"
-                
-                logger.info("Connecting to Supabase Cloud PostgreSQL database...")
-                self.pg_pool = pool.ThreadedConnectionPool(
-                    minconn=1,
-                    maxconn=10,
-                    dsn=clean_url
-                )
-                self.is_postgres = True
-                self._init_postgres()
-                logger.info("Connected successfully to Supabase Cloud PostgreSQL!")
-                return
+
+                # Check if URL uses direct IPv6 host; prepare IPv4 pooler alternatives
+                urls_to_try = [clean_url]
+                pooler_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require"
+                if pooler_url not in urls_to_try:
+                    urls_to_try.append(pooler_url)
+
+                connected = False
+                for target_url in urls_to_try:
+                    try:
+                        logger.info("Connecting to Supabase PostgreSQL database...")
+                        self.pg_pool = pool.ThreadedConnectionPool(
+                            minconn=1,
+                            maxconn=10,
+                            dsn=target_url
+                        )
+                        self.is_postgres = True
+                        self._init_postgres()
+                        logger.info("Connected successfully to Supabase Cloud PostgreSQL!")
+                        connected = True
+                        return
+                    except Exception as try_err:
+                        logger.warning("Supabase endpoint attempt failed: %s", try_err)
+
+                if not connected:
+                    raise Exception("All Supabase connection endpoints failed.")
             except Exception as e:
                 logger.warning("Supabase PostgreSQL connection failed: %s. Falling back to local storage.", e)
                 self.is_postgres = False
@@ -116,6 +134,15 @@ class DatabaseManager:
         finally:
             self.pg_pool.putconn(conn)
 
+    def _clean_row(self, row) -> Optional[Dict[str, Any]]:
+        if not row:
+            return None
+        d = dict(row)
+        for k, v in d.items():
+            if hasattr(v, "isoformat"):
+                d[k] = v.isoformat()
+        return d
+
     def _query_one(self, sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
         """Unified single row query across Supabase PostgreSQL and SQLite."""
         if self.is_postgres:
@@ -123,7 +150,7 @@ class DatabaseManager:
             with self._pg_cursor() as cur:
                 cur.execute(pg_sql, params)
                 row = cur.fetchone()
-                return dict(row) if row else None
+                return self._clean_row(row)
         else:
             conn = sqlite3.connect(self.sqlite_path)
             conn.row_factory = sqlite3.Row
@@ -131,7 +158,7 @@ class DatabaseManager:
             cur.execute(sql, params)
             row = cur.fetchone()
             conn.close()
-            return dict(row) if row else None
+            return self._clean_row(row)
 
     def _query_all(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """Unified multiple row query across Supabase PostgreSQL and SQLite."""
@@ -139,13 +166,13 @@ class DatabaseManager:
             pg_sql = sql.replace("?", "%s")
             with self._pg_cursor() as cur:
                 cur.execute(pg_sql, params)
-                return [dict(r) for r in cur.fetchall()]
+                return [self._clean_row(r) for r in cur.fetchall()]
         else:
             conn = sqlite3.connect(self.sqlite_path)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
             cur.execute(sql, params)
-            rows = [dict(r) for r in cur.fetchall()]
+            rows = [self._clean_row(r) for r in cur.fetchall()]
             conn.close()
             return rows
 

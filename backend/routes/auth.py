@@ -8,6 +8,13 @@ from backend.database import db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+def format_created_at(val) -> str:
+    if val is None:
+        return ""
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    return str(val)
+
 def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or malformed Authorization header")
@@ -47,7 +54,7 @@ def register(user_in: UserRegister):
             "full_name": user_record["full_name"],
             "organization": user_record["organization"],
             "role": user_record["role"],
-            "created_at": user_record.get("created_at", "")
+            "created_at": format_created_at(user_record.get("created_at"))
         }
     }
 
@@ -67,7 +74,7 @@ def login(login_in: UserLogin):
             "full_name": user.get("full_name", ""),
             "organization": user.get("organization", ""),
             "role": user.get("role", "owner"),
-            "created_at": user.get("created_at", "")
+            "created_at": format_created_at(user.get("created_at"))
         }
     }
 
@@ -79,5 +86,5 @@ def get_me(current_user: dict = Depends(get_current_user)):
         "full_name": current_user.get("full_name", ""),
         "organization": current_user.get("organization", ""),
         "role": current_user.get("role", "owner"),
-        "created_at": current_user.get("created_at", "")
+        "created_at": format_created_at(current_user.get("created_at"))
     }

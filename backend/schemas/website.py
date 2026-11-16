@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 
 class WebsiteCreate(BaseModel):
     name: str
@@ -12,4 +12,4 @@ class WebsiteResponse(BaseModel):
     name: str
     domain: str
     status: str
-    created_at: str
+    created_at: Optional[Any] = ""
