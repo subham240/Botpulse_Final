@@ -332,6 +332,15 @@ export const api = {
 
     getPoWStats: (): Promise<{ total_solved: number; avg_solve_time_ms: number; status: string; default_difficulty: number }> =>
       apiRequest<any>('/prevention/pow/stats', { method: 'GET' }),
+
+    getPolicies: (siteId: string = 'site_alvera_001'): Promise<any> =>
+      apiRequest<any>(`/prevention/policies?site_id=${siteId}`, { method: 'GET' }),
+
+    updatePolicies: (payload: any): Promise<{ status: string; message: string; policy: any }> =>
+      apiRequest<{ status: string; message: string; policy: any }>('/prevention/policies', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }),
   },
 
   // Direct Telemetry Ingestion (for test injectors / beacons)

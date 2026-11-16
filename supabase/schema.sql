@@ -96,6 +96,13 @@ CREATE TABLE IF NOT EXISTS pow_challenges (
     resolved_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 8. Prevention Policies & Bot Regulation Thresholds Table
+CREATE TABLE IF NOT EXISTS policies (
+    site_id TEXT PRIMARY KEY,
+    data TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- =============================================================================
 -- Performance Optimization Indexes
 -- =============================================================================
@@ -117,6 +124,7 @@ ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE threats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enforcement_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pow_challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE policies ENABLE ROW LEVEL SECURITY;
 
 -- Permissive policies for backend service role and anon ingest
 DO $$
@@ -141,6 +149,9 @@ BEGIN
 
     DROP POLICY IF EXISTS "Allow service role full access" ON pow_challenges;
     CREATE POLICY "Allow service role full access" ON pow_challenges FOR ALL USING (true);
+
+    DROP POLICY IF EXISTS "Allow service role full access" ON policies;
+    CREATE POLICY "Allow service role full access" ON policies FOR ALL USING (true);
 END $$;
 
 -- =============================================================================

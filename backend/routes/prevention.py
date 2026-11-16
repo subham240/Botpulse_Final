@@ -19,20 +19,31 @@ async def receive_enforcement_feedback(payload: EnforcementFeedbackPayload):
 
 @router.get("/prevention/policies")
 def get_prevention_policies(site_id: str = "site_alvera_001"):
+    policy = db.get_policy(site_id)
+    if not policy:
+        default_policy = PreventionPolicy(site_id=site_id)
+        return default_policy.dict()
+    return policy
+
+@router.put("/prevention/policies")
+@router.post("/prevention/policies")
+def update_prevention_policies(payload: Dict[str, Any] = Body(...)):
+    site_id = payload.get("site_id", "site_alvera_001")
+    updated = db.save_policy(site_id, payload)
     return {
-        "site_id": site_id,
-        "high_risk_action": "block",
-        "ai_agent_action": "verify",
-        "traditional_bot_action": "block",
-        "rate_limit_rpm": 60,
-        "enforcement_layers": ["Ed25519 Token Verification", "HS256 Fallback", "Cryptographic Proof-of-Work (PoW)"]
+        "status": "success",
+        "message": f"Bot regulation policies synchronized to edge for {site_id}",
+        "policy": updated
     }
 
 @router.post("/prevention/pow/challenge")
-def request_pow_challenge(difficulty: int = 3):
+def request_pow_challenge(difficulty: int = 3, site_id: str = "site_alvera_001"):
     """
     Issues an HMAC-signed Cryptographic Proof-of-Work challenge to client browser.
     """
+    if difficulty <= 0:
+        pol = db.get_policy(site_id)
+        difficulty = pol.get("pow_difficulty", 3) if pol else 3
     return generate_pow_challenge(difficulty=difficulty)
 
 @router.post("/prevention/pow/verify")

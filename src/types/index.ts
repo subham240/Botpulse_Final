@@ -115,3 +115,26 @@ export interface TeamMember {
   lastActive: string;
   avatarUrl?: string;
 }
+
+export interface PreventionPolicy {
+  site_id: string;
+  block_threshold: number;
+  verify_threshold: number;
+  auto_mitigation: boolean;
+  high_risk_action: EnforcementDecision;
+  ai_agent_action: EnforcementDecision;
+  traditional_bot_action: EnforcementDecision;
+  verified_bot_action: 'allow' | 'rate_limit';
+  rate_limit_rpm: number;
+  burst_allowance: number;
+  rate_limit_action: 'throttle' | 'pow_challenge' | 'drop';
+  pow_difficulty: number;
+  lstm_kinematic_sensitivity: 'relaxed' | 'standard' | 'aggressive';
+  block_headless_browsers: boolean;
+  block_known_scrapers: boolean;
+  block_data_centers: boolean;
+  rapid_scan_protection: boolean;
+  enforcement_layers?: string[];
+  block_list?: string[];
+  updated_at?: string;
+}

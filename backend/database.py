@@ -27,6 +27,7 @@ class DatabaseManager:
         self.is_mongodb: bool = False
         self.mongo_client = None
         self.mongo_db = None
+        self._policy_cache: Dict[str, Any] = {}
         
         is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
         if is_serverless:
@@ -258,6 +259,12 @@ class DatabaseManager:
                 resolved_at TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS policies (
+                site_id TEXT PRIMARY KEY,
+                data TEXT,
+                updated_at TEXT
+            );
+
             CREATE INDEX IF NOT EXISTS idx_events_session_ts ON events (session_id, timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_events_site_ts ON events (site_key, timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_sessions_site_last ON sessions (site_key, last_seen DESC);
@@ -422,6 +429,14 @@ class DatabaseManager:
             time_taken_ms REAL,
             status TEXT,
             resolved_at TEXT
+        )
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS policies (
+            site_id TEXT PRIMARY KEY,
+            data TEXT,
+            updated_at TEXT
         )
         """)
 
@@ -1119,5 +1134,64 @@ class DatabaseManager:
                 "default_difficulty": 3
             }
         return {"total_solved": 0, "avg_solve_time_ms": 0.0, "status": "active", "default_difficulty": 3}
+
+    def get_policy(self, site_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves active bot regulation policies for a site."""
+        if site_id in self._policy_cache:
+            return self._policy_cache[site_id]
+        if self.is_mongodb:
+            doc = self.mongo_db.policies.find_one({"site_id": site_id}, {"_id": 0})
+            if doc:
+                self._policy_cache[site_id] = doc
+                return doc
+        else:
+            try:
+                row = self._query_one("SELECT data FROM policies WHERE site_id = ?", (site_id,))
+                if row and row.get("data"):
+                    pol = json.loads(row["data"])
+                    self._policy_cache[site_id] = pol
+                    return pol
+            except Exception as e:
+                logger.warning("Could not query policy table: %s", e)
+        return None
+
+    def save_policy(self, site_id: str, policy_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Saves active bot regulation policies for a site."""
+        policy_data["site_id"] = site_id
+        policy_data["updated_at"] = datetime.utcnow().isoformat()
+        self._policy_cache[site_id] = policy_data
+
+        if self.is_mongodb:
+            self.mongo_db.policies.update_one(
+                {"site_id": site_id},
+                {"$set": policy_data},
+                upsert=True
+            )
+        else:
+            try:
+                data_json = json.dumps(policy_data)
+                now_str = datetime.utcnow().isoformat()
+                if self.is_postgres:
+                    sql = """
+                    INSERT INTO policies (site_id, data, updated_at)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (site_id) DO UPDATE SET
+                        data = EXCLUDED.data,
+                        updated_at = EXCLUDED.updated_at
+                    """
+                    self._execute(sql, (site_id, data_json, now_str))
+                else:
+                    sql = """
+                    INSERT INTO policies (site_id, data, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(site_id) DO UPDATE SET
+                        data = excluded.data,
+                        updated_at = excluded.updated_at
+                    """
+                    self._execute(sql, (site_id, data_json, now_str))
+            except Exception as e:
+                logger.warning("Could not persist policy table, stored in memory: %s", e)
+
+        return policy_data
 
 db = DatabaseManager()
