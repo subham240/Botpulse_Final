@@ -5,15 +5,15 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://oem-mouse-largest-primary.trycloudflare.com/api/v1/:path*"
+      "destination": "https://ridge-xhtml-acc-bali.trycloudflare.com/api/v1/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://oem-mouse-largest-primary.trycloudflare.com/health"
+      "destination": "https://ridge-xhtml-acc-bali.trycloudflare.com/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://oem-mouse-largest-primary.trycloudflare.com/botpulse.js"
+      "destination": "https://ridge-xhtml-acc-bali.trycloudflare.com/botpulse.js"
     },
     {
       "source": "/(.*)",
