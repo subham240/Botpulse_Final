@@ -4,7 +4,7 @@
  */
 
 export function getApiBaseUrl(): string {
-  const DEFAULT_TUNNEL_API = 'https://roller-duplicate-prospects-becoming.trycloudflare.com/api/v1';
+  const DEFAULT_TUNNEL_API = 'https://attraction-jesus-winner-supervision.trycloudflare.com/api/v1';
 
   if (typeof window !== 'undefined') {
     const isLocalhost =
