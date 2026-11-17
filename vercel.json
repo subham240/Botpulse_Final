@@ -5,27 +5,27 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://str-polished-healthcare-experience.trycloudflare.com/api/v1/:path*"
+      "destination": "https://claire-mailto-periods-pst.trycloudflare.com/api/v1/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://str-polished-healthcare-experience.trycloudflare.com/api/:path*"
+      "destination": "https://claire-mailto-periods-pst.trycloudflare.com/api/:path*"
     },
     {
       "source": "/events",
-      "destination": "https://str-polished-healthcare-experience.trycloudflare.com/api/v1/events"
+      "destination": "https://claire-mailto-periods-pst.trycloudflare.com/api/v1/events"
     },
     {
       "source": "/telemetry/:path*",
-      "destination": "https://str-polished-healthcare-experience.trycloudflare.com/api/v1/telemetry/:path*"
+      "destination": "https://claire-mailto-periods-pst.trycloudflare.com/api/v1/telemetry/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://str-polished-healthcare-experience.trycloudflare.com/health"
+      "destination": "https://claire-mailto-periods-pst.trycloudflare.com/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://str-polished-healthcare-experience.trycloudflare.com/botpulse.js"
+      "destination": "https://claire-mailto-periods-pst.trycloudflare.com/botpulse.js"
     },
     {
       "source": "/(.*)",
