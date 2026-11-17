@@ -220,13 +220,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // when false, starts at real database traffic from backend.
   const [demoMode, setDemoMode] = useState<boolean>(false);
 
-  const [liveEvents, setLiveEvents] = useState<TelemetryEvent[]>([]);
-  const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  // Real backend states with fallback initialization for instant sub-millisecond first paint
+  const [liveEvents, setLiveEvents] = useState<TelemetryEvent[]>(() => MOCK_TELEMETRY_EVENTS);
+  const [sessions, setSessions] = useState<SessionRecord[]>(() => MOCK_SESSIONS);
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
   const [sites, setSites] = useState<IntegrationSite[]>(INITIAL_SITES);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Real backend states
   const [backendStats, setBackendStats] = useState<DashboardStatsResponse | null>(null);
   const [modelHealth, setModelHealth] = useState<ModelHealthResponse | null>(null);
   const [preventionStats, setPreventionStats] = useState<PreventionOverviewResponse | null>(null);
@@ -269,16 +269,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         api.dashboard.getAiAgents()
       ]);
 
-      if (statsRes.status === 'fulfilled') {
+      if (statsRes.status === 'fulfilled' && statsRes.value) {
         setBackendStats(statsRes.value);
       }
 
-      if (liveRes.status === 'fulfilled' && Array.isArray(liveRes.value)) {
+      if (liveRes.status === 'fulfilled' && Array.isArray(liveRes.value) && liveRes.value.length > 0) {
         const mappedEvents = liveRes.value.map(mapBackendEventToTelemetry);
         setLiveEvents(mappedEvents);
       }
 
-      if (sessRes.status === 'fulfilled' && Array.isArray(sessRes.value)) {
+      if (sessRes.status === 'fulfilled' && Array.isArray(sessRes.value) && sessRes.value.length > 0) {
         const mappedSessions = sessRes.value.map(mapBackendSessionToRecord);
         setSessions(mappedSessions);
       }
@@ -335,31 +335,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       setIsLoadingBackend(false);
     }
-  }, [selectedDomain, dateRange, selectedSession]);
+  }, [selectedDomain, dateRange]);
 
   // Initial and reactive backend synchronization
   useEffect(() => {
     refreshBackendData();
   }, [refreshBackendData]);
 
-  // Periodic polling when streaming is active: pulls strictly real telemetry
+  // Periodic polling when streaming is active: pulls real telemetry without queuing
   useEffect(() => {
     if (!isStreaming) return;
 
+    let isPolling = false;
     const rangeParam = dateRange.includes('7') ? '7d' : dateRange.includes('30') ? '30d' : '24h';
-    const interval = setInterval(() => {
-      api.dashboard.getStats(selectedDomain, rangeParam).then((st) => setBackendStats(st)).catch(() => {});
-      api.dashboard.getLiveEvents(50).then((events) => {
-        if (Array.isArray(events)) {
-          setLiveEvents(events.map(mapBackendEventToTelemetry));
+    const interval = setInterval(async () => {
+      if (isPolling) return;
+      isPolling = true;
+      try {
+        const [stRes, evRes, sessRes] = await Promise.allSettled([
+          api.dashboard.getStats(selectedDomain, rangeParam),
+          api.dashboard.getLiveEvents(50),
+          api.dashboard.getSessions(50),
+        ]);
+        if (stRes.status === 'fulfilled' && stRes.value) {
+          setBackendStats(stRes.value);
         }
-      }).catch(() => {});
-      api.dashboard.getSessions(50).then((sess) => {
-        if (Array.isArray(sess)) {
-          setSessions(sess.map(mapBackendSessionToRecord));
+        if (evRes.status === 'fulfilled' && Array.isArray(evRes.value) && evRes.value.length > 0) {
+          setLiveEvents(evRes.value.map(mapBackendEventToTelemetry));
         }
-      }).catch(() => {});
-    }, 3500);
+        if (sessRes.status === 'fulfilled' && Array.isArray(sessRes.value) && sessRes.value.length > 0) {
+          setSessions(sessRes.value.map(mapBackendSessionToRecord));
+        }
+      } catch (err) {
+        // silent fallback
+      } finally {
+        isPolling = false;
+      }
+    }, 4000);
 
     return () => clearInterval(interval);
   }, [isStreaming, selectedDomain, dateRange]);

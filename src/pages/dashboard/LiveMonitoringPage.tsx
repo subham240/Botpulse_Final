@@ -15,7 +15,16 @@ import {
 import { VisitorCategory, EnforcementDecision } from '../../types';
 
 export const LiveMonitoringPage: React.FC = () => {
-  const { liveEvents, isStreaming, setIsStreaming, setSelectedSession, sessions } = useApp();
+  const {
+    liveEvents,
+    isStreaming,
+    setIsStreaming,
+    setSelectedSession,
+    sessions,
+    refreshBackendData,
+    isLoadingBackend,
+    sendTestEvent
+  } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | VisitorCategory>('all');
   const [enforcementFilter, setEnforcementFilter] = useState<'all' | EnforcementDecision>('all');
@@ -26,10 +35,10 @@ export const LiveMonitoringPage: React.FC = () => {
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       return (
-        ev.ip.toLowerCase().includes(q) ||
-        ev.sessionId.toLowerCase().includes(q) ||
-        ev.path.toLowerCase().includes(q) ||
-        ev.domain.toLowerCase().includes(q)
+        (ev.ip || '').toLowerCase().includes(q) ||
+        (ev.sessionId || '').toLowerCase().includes(q) ||
+        (ev.path || '').toLowerCase().includes(q) ||
+        (ev.domain || '').toLowerCase().includes(q)
       );
     }
     return true;
@@ -47,6 +56,16 @@ export const LiveMonitoringPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => refreshBackendData()}
+            disabled={isLoadingBackend}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono text-[#A3ADA6] hover:text-[#F5F7F5] bg-surface-1 border border-white/10 hover:border-white/20 flex items-center gap-1.5 transition-all"
+            title="Force refresh live telemetry feed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBackend ? 'animate-spin text-[#43D6A0]' : ''}`} />
+            <span>{isLoadingBackend ? 'Syncing...' : 'Refresh'}</span>
+          </button>
+
           <button
             onClick={() => setIsStreaming(!isStreaming)}
             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-2 border transition-all ${
@@ -133,42 +152,70 @@ export const LiveMonitoringPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filteredEvents.map((ev) => (
-                <tr
-                  key={ev.id}
-                  onClick={() => {
-                    const match = sessions.find((s) => s.id === ev.sessionId) || sessions[0];
-                    setSelectedSession(match);
-                  }}
-                  className="hover:bg-white/5 cursor-pointer transition-colors"
-                >
-                  <td className="py-3 px-3 text-slate-400">{ev.timestamp}</td>
-                  <td className="py-3 px-3 text-pulse-cyan font-bold">{ev.sessionId}</td>
-                  <td className="py-3 px-3">
-                    <Badge value={ev.category} />
-                  </td>
-                  <td className="py-3 px-3">
-                    <div className="text-slate-200 font-semibold">{ev.ip}</div>
-                    <div className="text-[10px] text-slate-500">{ev.domain}</div>
-                  </td>
-                  <td className="py-3 px-3 text-slate-300">
-                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-surface-3 text-slate-400 mr-1.5">
-                      {ev.method}
-                    </span>
-                    {ev.path}
-                  </td>
-                  <td className="py-3 px-3">
-                    <div className="text-slate-300 font-semibold text-[11px]">{ev.stageTriggered}</div>
-                    <div className="text-[10px] text-slate-500 truncate max-w-xs">{ev.behaviourAnomaly}</div>
-                  </td>
-                  <td className="py-3 px-3">
-                    <Badge value={ev.riskLevel} />
-                  </td>
-                  <td className="py-3 px-3">
-                    <Badge value={ev.enforcement} />
+              {filteredEvents.length > 0 ? (
+                filteredEvents.map((ev) => (
+                  <tr
+                    key={ev.id}
+                    onClick={() => {
+                      const match = sessions.find((s) => s.id === ev.sessionId) || sessions[0];
+                      setSelectedSession(match);
+                    }}
+                    className="hover:bg-white/5 cursor-pointer transition-colors"
+                  >
+                    <td className="py-3 px-3 text-slate-400">{ev.timestamp}</td>
+                    <td className="py-3 px-3 text-pulse-cyan font-bold">{ev.sessionId}</td>
+                    <td className="py-3 px-3">
+                      <Badge value={ev.category} />
+                    </td>
+                    <td className="py-3 px-3">
+                      <div className="text-slate-200 font-semibold">{ev.ip}</div>
+                      <div className="text-[10px] text-slate-500">{ev.domain}</div>
+                    </td>
+                    <td className="py-3 px-3 text-slate-300">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-surface-3 text-slate-400 mr-1.5">
+                        {ev.method}
+                      </span>
+                      {ev.path}
+                    </td>
+                    <td className="py-3 px-3">
+                      <div className="text-slate-300 font-semibold text-[11px]">{ev.stageTriggered}</div>
+                      <div className="text-[10px] text-slate-500 truncate max-w-xs">{ev.behaviourAnomaly}</div>
+                    </td>
+                    <td className="py-3 px-3">
+                      <Badge value={ev.riskLevel} />
+                    </td>
+                    <td className="py-3 px-3">
+                      <Badge value={ev.enforcement} />
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-[#43D6A0]">
+                        <Activity className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div className="text-sm font-semibold text-slate-200">
+                        {searchTerm || categoryFilter !== 'all' || enforcementFilter !== 'all'
+                          ? 'No telemetry packets match your filter criteria'
+                          : 'Awaiting incoming telemetry beacons from connected stores'}
+                      </div>
+                      <p className="text-xs text-slate-400 max-w-md">
+                        {searchTerm || categoryFilter !== 'all' || enforcementFilter !== 'all'
+                          ? 'Try resetting the filters or clearing the search box to view full traffic.'
+                          : 'Visit the Élvara storefront or click below to simulate real-time visitor traffic.'}
+                      </p>
+                      <button
+                        onClick={() => sendTestEvent('human')}
+                        className="mt-2 px-3.5 py-1.5 rounded-lg bg-[#43D6A0]/10 hover:bg-[#43D6A0]/20 border border-[#43D6A0]/30 text-xs font-mono text-[#43D6A0] transition-colors"
+                      >
+                        + Simulate Live Human Visitor
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

@@ -9,7 +9,7 @@ export function getApiBaseUrl(): string {
   const ENV_API = (meta && meta.env && meta.env.VITE_API_URL) ? meta.env.VITE_API_URL : DEFAULT_TUNNEL_API;
 
   if (typeof window !== 'undefined') {
-    // 1. Explicit query param ?api=... overrides everything
+    // 1. Explicit query param ?api=... overrides everything and persists
     try {
       const params = new URLSearchParams(window.location.search);
       const paramUrl = params.get('api');
@@ -20,15 +20,10 @@ export function getApiBaseUrl(): string {
       }
     } catch {}
 
-    // 2. Check saved localStorage (configured via Configure Engine or past session)
+    // 2. Check saved localStorage (configured via 1-click ?api= link, past session, or settings)
     const saved = localStorage.getItem('bp_api_url');
     if (saved && saved.trim() !== '') {
-      // If it's an expired/stale Cloudflare Tunnel that differs from active one, purge it
-      if (saved.includes('trycloudflare.com') && !saved.startsWith(DEFAULT_TUNNEL_API.split('/api')[0])) {
-        localStorage.removeItem('bp_api_url');
-      } else {
-        return saved.replace(/\/+$/, '');
-      }
+      return saved.replace(/\/+$/, '');
     }
 
     // 3. If running on Vercel or any production host, use same-origin /api/v1 (proxied by vercel.json)
@@ -195,7 +190,8 @@ class ApiError extends Error {
 }
 
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${getApiBaseUrl()}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${endpoint}`;
   const headers = new Headers(options.headers || {});
   
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -207,29 +203,40 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutMs = options.method === 'POST' ? 9000 : 6000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!res.ok) {
-    if (res.status === 530 && typeof window !== 'undefined') {
-      localStorage.removeItem('bp_api_url');
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      let errMsg = `API request failed with status ${res.status}`;
+      try {
+        const errData = await res.json();
+        errMsg = errData.detail || errData.message || errMsg;
+      } catch {
+        // Body not JSON
+      }
+      if (res.status === 530) {
+        errMsg = 'Cloudflare Tunnel unreachable (status 530). Please ensure start_tunnel is running.';
+      }
+      throw new ApiError(errMsg, res.status);
     }
-    let errMsg = `API request failed with status ${res.status}`;
-    try {
-      const errData = await res.json();
-      errMsg = errData.detail || errData.message || errMsg;
-    } catch {
-      // Body not JSON
+
+    return (await res.json()) as T;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new ApiError(`Request to ${endpoint} timed out. Please check backend connection.`, 408);
     }
-    if (res.status === 530) {
-      errMsg = 'Cloudflare Tunnel unreachable (status 530). Stale endpoint reset — please retry.';
-    }
-    throw new ApiError(errMsg, res.status);
+    throw err;
   }
-
-  return (await res.json()) as T;
 }
 
 export const api = {
