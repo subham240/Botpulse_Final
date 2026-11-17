@@ -5,12 +5,10 @@
 
 export function getApiBaseUrl(): string {
   const DEFAULT_TUNNEL_API = 'https://attraction-jesus-winner-supervision.trycloudflare.com/api/v1';
+  const meta = import.meta as any;
+  const ENV_API = (meta && meta.env && meta.env.VITE_API_URL) ? meta.env.VITE_API_URL : DEFAULT_TUNNEL_API;
 
   if (typeof window !== 'undefined') {
-    const isLocalhost =
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1';
-
     // 1. Explicit query param ?api=... overrides everything
     try {
       const params = new URLSearchParams(window.location.search);
@@ -22,27 +20,20 @@ export function getApiBaseUrl(): string {
       }
     } catch {}
 
-    // 2. Check saved localStorage
+    // 2. Check saved localStorage (configured via Configure Engine)
     const saved = localStorage.getItem('bp_api_url');
     if (saved && saved.trim() !== '') {
-      // If running locally, never route through an external ephemeral cloudflare tunnel
-      if (isLocalhost && saved.includes('trycloudflare.com')) {
-        localStorage.removeItem('bp_api_url');
-      } else if (!isLocalhost && (saved.includes('127.0.0.1') || saved.includes('localhost'))) {
-        localStorage.removeItem('bp_api_url');
-      } else {
-        return saved.replace(/\/+$/, '');
-      }
+      return saved.replace(/\/+$/, '');
     }
 
     // 3. If running on Vercel or any production host, use same-origin /api/v1 (proxied by vercel.json)
-    if (!isLocalhost) {
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
       return '/api/v1';
     }
   }
 
-  // 4. Default for localhost: direct to local backend
-  return 'http://127.0.0.1:8000/api/v1';
+  // 4. Default: Active Cloudflare Tunnel endpoint
+  return ENV_API || DEFAULT_TUNNEL_API;
 }
 
 export interface ApiUser {
