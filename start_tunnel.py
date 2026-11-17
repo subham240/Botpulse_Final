@@ -215,10 +215,10 @@ def main():
         subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], capture_output=True)
     time.sleep(1)
 
-    print("\n[2/3] Establishing fresh HTTP/2 Cloudflare Tunnel to http://127.0.0.1:8000...", flush=True)
+    print("\n[2/3] Establishing fresh Cloudflare Tunnel to http://127.0.0.1:8000...", flush=True)
     tunnel_log_file = open(TUNNEL_LOG, "w", encoding="utf-8")
     subprocess.Popen(
-        [cloudflared_bin, "tunnel", "--protocol", "http2", "--edge-ip-version", "4", "--url", "http://127.0.0.1:8000"],
+        [cloudflared_bin, "tunnel", "--url", "http://127.0.0.1:8000"],
         cwd=ROOT_DIR,
         stdout=tunnel_log_file,
         stderr=subprocess.STDOUT,

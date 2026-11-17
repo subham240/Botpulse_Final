@@ -2,6 +2,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, Depends, Header
 from typing import Optional
 
+from datetime import datetime
 from backend.schemas.auth import UserRegister, UserLogin, UserResponse, TokenResponse
 from backend.core.security import hash_password, verify_password, create_access_token, decode_access_token
 from backend.database import db
@@ -22,7 +23,19 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     payload = decode_access_token(token)
     if not payload or "sub" not in payload:
         raise HTTPException(status_code=401, detail="Invalid or expired access token")
-    user = db.get_user_by_email(payload["sub"])
+    
+    email = payload["sub"].strip().lower()
+    if email == "analyst@botpulse.io":
+        return {
+            "id": "usr_seed_analyst",
+            "email": "analyst@botpulse.io",
+            "full_name": "Alexander Wright",
+            "organization": "BotPulse Cyber Labs",
+            "role": "owner",
+            "created_at": None
+        }
+
+    user = db.get_user_by_email(email)
     if not user:
         raise HTTPException(status_code=401, detail="User account not found")
     return user
@@ -61,24 +74,25 @@ def register(user_in: UserRegister):
 @router.post("/login", response_model=TokenResponse)
 def login(login_in: UserLogin):
     clean_email = login_in.email.strip().lower()
-    user = db.get_user_by_email(clean_email)
 
-    is_valid = False
-    if user and verify_password(login_in.password, user.get("hashed_password", "")):
-        is_valid = True
-    elif clean_email == "analyst@botpulse.io" and login_in.password in ("botpulse2026!", "••••••••••••"):
-        if not user:
-            user = {
+    # Fast-path for default SOC Analyst (sub-millisecond instant auth)
+    if clean_email == "analyst@botpulse.io" and login_in.password in ("botpulse2026!", "••••••••••••"):
+        token = create_access_token({"sub": "analyst@botpulse.io", "role": "owner"})
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
                 "id": "usr_seed_analyst",
                 "email": "analyst@botpulse.io",
                 "full_name": "Alexander Wright",
                 "organization": "BotPulse Cyber Labs",
                 "role": "owner",
-                "created_at": None
+                "created_at": datetime.utcnow().isoformat()
             }
-        is_valid = True
+        }
 
-    if not is_valid or not user:
+    user = db.get_user_by_email(clean_email)
+    if not user or not verify_password(login_in.password, user.get("hashed_password", "")):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = create_access_token({"sub": user["email"], "role": user.get("role", "owner")})
@@ -88,8 +102,8 @@ def login(login_in: UserLogin):
         "user": {
             "id": user["id"],
             "email": user["email"],
-            "full_name": user.get("full_name", "Alexander Wright"),
-            "organization": user.get("organization", "BotPulse Cyber Labs"),
+            "full_name": user.get("full_name", ""),
+            "organization": user.get("organization", ""),
             "role": user.get("role", "owner"),
             "created_at": format_created_at(user.get("created_at"))
         }
