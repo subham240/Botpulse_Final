@@ -36,6 +36,14 @@ export function getApiBaseUrl(): string {
   return ENV_API || DEFAULT_AWS_API;
 }
 
+/**
+ * Returns the public HTTPS endpoint for external protected applications (e.g. Elvara)
+ * to prevent browser Mixed Content restrictions.
+ */
+export function getTelemetryIngestUrl(): string {
+  return 'https://botpulse-final.vercel.app/api/v1';
+}
+
 export interface ApiUser {
   id: string;
   email: string;
