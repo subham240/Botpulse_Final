@@ -5,27 +5,27 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://certain-legislative-divorce-joke.trycloudflare.com/api/v1/:path*"
+      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/api/v1/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://certain-legislative-divorce-joke.trycloudflare.com/api/:path*"
+      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/api/:path*"
     },
     {
       "source": "/events",
-      "destination": "https://certain-legislative-divorce-joke.trycloudflare.com/api/v1/events"
+      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/api/v1/events"
     },
     {
       "source": "/telemetry/:path*",
-      "destination": "https://certain-legislative-divorce-joke.trycloudflare.com/api/v1/telemetry/:path*"
+      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/api/v1/telemetry/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://certain-legislative-divorce-joke.trycloudflare.com/health"
+      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://certain-legislative-divorce-joke.trycloudflare.com/botpulse.js"
+      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/botpulse.js"
     },
     {
       "source": "/(.*)",

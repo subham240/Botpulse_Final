@@ -309,15 +309,16 @@ def main():
 
     # Supervise continuously so tunnel and backend remain active
     print("  Status: Services running. Monitoring health (Press Ctrl+C to stop)...", flush=True)
-    try:
-        hb_tick = 0
-        failed_checks = 0
-        local_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        while True:
+    hb_tick = 0
+    failed_checks = 0
+    local_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    while True:
+        try:
             time.sleep(10)
             hb_tick += 1
 
-            # Check local backend health
+            # 1. Check local backend health
             backend_ok = False
             try:
                 r = local_opener.open("http://127.0.0.1:8000/health", timeout=5.0)
@@ -328,17 +329,28 @@ def main():
                 failed_checks += 1
 
             if not backend_ok and failed_checks >= 4:
-                print("  [Auto-Heal] Backend port 8000 unresponsive after 4 checks. Recovering...", flush=True)
+                try:
+                    print("  [Auto-Heal] Backend port 8000 unresponsive after 4 checks. Recovering...", flush=True)
+                except Exception:
+                    pass
                 ensure_backend_running()
                 failed_checks = 0
 
+            # 2. Heartbeat logging
             if hb_tick % 3 == 0:
-                print(f"  [Heartbeat] BotPulse Tunnel & Backend OK: {public_url}", flush=True)
-    except KeyboardInterrupt:
-        print("\nStopping BotPulse services...", flush=True)
-        stop_services()
-    except Exception:
-        pass
+                try:
+                    print(f"  [Heartbeat] BotPulse Tunnel & Backend OK: {public_url}", flush=True)
+                except Exception:
+                    pass
+        except KeyboardInterrupt:
+            try:
+                print("\nStopping BotPulse services...", flush=True)
+            except Exception:
+                pass
+            stop_services()
+            break
+        except Exception:
+            time.sleep(5)
 
 if __name__ == "__main__":
     main()

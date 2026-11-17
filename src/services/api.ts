@@ -4,7 +4,7 @@
  */
 
 export function getApiBaseUrl(): string {
-  const DEFAULT_TUNNEL_API = 'https://certain-legislative-divorce-joke.trycloudflare.com/api/v1';
+  const DEFAULT_TUNNEL_API = 'https://venice-purposes-officers-classic.trycloudflare.com/api/v1';
   const meta = import.meta as any;
   const ENV_API = (meta && meta.env && meta.env.VITE_API_URL) ? meta.env.VITE_API_URL : DEFAULT_TUNNEL_API;
 
