@@ -311,6 +311,7 @@ def main():
     try:
         hb_tick = 0
         failed_checks = 0
+        local_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         while True:
             time.sleep(10)
             hb_tick += 1
@@ -318,15 +319,15 @@ def main():
             # Check local backend health
             backend_ok = False
             try:
-                r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2.5)
+                r = local_opener.open("http://127.0.0.1:8000/health", timeout=5.0)
                 if r.status == 200:
                     backend_ok = True
                     failed_checks = 0
             except Exception:
                 failed_checks += 1
 
-            if not backend_ok and failed_checks >= 2:
-                print("  [Auto-Heal] Backend port 8000 unresponsive. Recovering...", flush=True)
+            if not backend_ok and failed_checks >= 4:
+                print("  [Auto-Heal] Backend port 8000 unresponsive after 4 checks. Recovering...", flush=True)
                 ensure_backend_running()
                 failed_checks = 0
 
