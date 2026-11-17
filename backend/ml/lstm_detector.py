@@ -5,15 +5,21 @@ import logging
 from typing import Dict, Any, List, Optional
 import numpy as np
 
-import torch
-import torch.nn as nn
+try:
+    import torch
+    import torch.nn as nn
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    nn = None
+    TORCH_AVAILABLE = False
 import joblib
 
 from backend.config import settings
 
 logger = logging.getLogger("botpulse.ml.lstm")
 
-class BiLSTMBehavioralClassifier(nn.Module):
+class BiLSTMBehavioralClassifier(nn.Module if TORCH_AVAILABLE and nn is not None else object):
     """
     Stage 2: Bidirectional LSTM Behavioral Sequencer.
     Models long-range temporal dependencies in mouse kinematics.
@@ -69,6 +75,11 @@ class LSTMDetector:
 
     def _load_model(self):
         try:
+            if not TORCH_AVAILABLE:
+                self.is_ready = False
+                logger.info("PyTorch not installed in this environment. LSTM detector using kinematic heuristics.")
+                return
+
             if os.path.exists(self.model_path) and os.path.exists(self.scaler_path):
                 self.scaler = joblib.load(self.scaler_path)
                 loaded = torch.load(self.model_path, map_location=torch.device("cpu"), weights_only=False)
