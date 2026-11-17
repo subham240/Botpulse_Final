@@ -46,6 +46,7 @@ class DatabaseManager:
             except Exception:
                 pass
 
+        self._init_sqlite()
         self._init_connection()
 
     def _init_connection(self):
@@ -66,10 +67,12 @@ class DatabaseManager:
                     clean_url = "postgresql://" + clean_url[len("postgres://"):]
                 if "sslmode=" not in clean_url:
                     clean_url += ("&" if "?" in clean_url else "?") + "sslmode=require"
+                if "connect_timeout=" not in clean_url:
+                    clean_url += ("&" if "?" in clean_url else "?") + "connect_timeout=4&keepalives=1&keepalives_idle=20&keepalives_interval=5&keepalives_count=3"
 
                 # Prefer IPv4 Transaction Pooler (port 6543) which has no 15-client session limits
                 clean_url = clean_url.replace(":5432/", ":6543/").replace(":5432?", ":6543?")
-                pooler_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require"
+                pooler_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=4&keepalives=1&keepalives_idle=20&keepalives_interval=5&keepalives_count=3"
                 urls_to_try = [clean_url]
                 if pooler_url not in urls_to_try:
                     urls_to_try.append(pooler_url)
@@ -127,35 +130,43 @@ class DatabaseManager:
         import time
         conn = None
         is_overflow = False
-
-        for attempt in range(8):
-            try:
-                conn = self.pg_pool.getconn()
-                break
-            except Exception as pe:
-                if "exhausted" in str(pe).lower() and attempt < 7:
-                    time.sleep(0.04 * (attempt + 1))
-                else:
-                    break
-
-        if conn is None:
-            # Fallback: On-demand connection if pool is completely saturated
-            try:
-                import psycopg2
-                raw_url = getattr(self, "_active_pg_url", None) or settings.SUPABASE_DB_URL or ""
-                fallback_url = raw_url.replace(":5432/", ":6543/").replace(":5432?", ":6543?")
-                conn = psycopg2.connect(fallback_url, connect_timeout=5)
-                is_overflow = True
-            except Exception as err:
-                logger.error("Failed to acquire PostgreSQL connection: %s", err)
-                raise
+        is_bad_conn = False
 
         try:
+            for attempt in range(4):
+                try:
+                    if self.pg_pool:
+                        conn = self.pg_pool.getconn()
+                        # If connection was closed or broken, discard it and retry
+                        if getattr(conn, "closed", 0) != 0:
+                            self.pg_pool.putconn(conn, close=True)
+                            conn = None
+                            continue
+                        break
+                except Exception as pe:
+                    if "exhausted" in str(pe).lower() and attempt < 3:
+                        time.sleep(0.04 * (attempt + 1))
+                    else:
+                        break
+
+            if conn is None:
+                # Fallback: On-demand connection with strict 4s timeout
+                try:
+                    import psycopg2
+                    raw_url = getattr(self, "_active_pg_url", None) or settings.SUPABASE_DB_URL or ""
+                    fallback_url = raw_url.replace(":5432/", ":6543/").replace(":5432?", ":6543?")
+                    conn = psycopg2.connect(fallback_url, connect_timeout=4, options="-c statement_timeout=4000")
+                    is_overflow = True
+                except Exception as err:
+                    logger.warning("Failed to acquire PostgreSQL connection: %s", err)
+                    raise
+
             from psycopg2.extras import RealDictCursor
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 yield cur
             conn.commit()
         except Exception:
+            is_bad_conn = True
             if conn:
                 try:
                     conn.rollback()
@@ -168,9 +179,9 @@ class DatabaseManager:
                     conn.close()
                 except Exception:
                     pass
-            elif conn is not None:
+            elif conn is not None and self.pg_pool:
                 try:
-                    self.pg_pool.putconn(conn)
+                    self.pg_pool.putconn(conn, close=is_bad_conn)
                 except Exception:
                     pass
 
@@ -186,12 +197,16 @@ class DatabaseManager:
     def _query_one(self, sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
         """Unified single row query across Supabase PostgreSQL and SQLite."""
         if self.is_postgres:
-            pg_sql = sql.replace("?", "%s")
-            with self._pg_cursor() as cur:
-                cur.execute(pg_sql, params)
-                row = cur.fetchone()
-                return self._clean_row(row)
-        else:
+            try:
+                pg_sql = sql.replace("?", "%s")
+                with self._pg_cursor() as cur:
+                    cur.execute(pg_sql, params)
+                    row = cur.fetchone()
+                    return self._clean_row(row)
+            except Exception as e:
+                logger.warning("PostgreSQL query_one fallback to SQLite: %s", e)
+
+        try:
             conn = sqlite3.connect(self.sqlite_path)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
@@ -199,15 +214,22 @@ class DatabaseManager:
             row = cur.fetchone()
             conn.close()
             return self._clean_row(row)
+        except Exception as sqle:
+            logger.error("SQLite query_one failed: %s", sqle)
+            return None
 
     def _query_all(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """Unified multiple row query across Supabase PostgreSQL and SQLite."""
         if self.is_postgres:
-            pg_sql = sql.replace("?", "%s")
-            with self._pg_cursor() as cur:
-                cur.execute(pg_sql, params)
-                return [self._clean_row(r) for r in cur.fetchall()]
-        else:
+            try:
+                pg_sql = sql.replace("?", "%s")
+                with self._pg_cursor() as cur:
+                    cur.execute(pg_sql, params)
+                    return [self._clean_row(r) for r in cur.fetchall()]
+            except Exception as e:
+                logger.warning("PostgreSQL query_all fallback to SQLite: %s", e)
+
+        try:
             conn = sqlite3.connect(self.sqlite_path)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
@@ -215,26 +237,39 @@ class DatabaseManager:
             rows = [self._clean_row(r) for r in cur.fetchall()]
             conn.close()
             return rows
+        except Exception as sqle:
+            logger.error("SQLite query_all failed: %s", sqle)
+            return []
 
     def _execute(self, sql: str, params: tuple = ()) -> int:
         """Unified mutation execution across Supabase PostgreSQL and SQLite."""
+        affected = 0
         if self.is_postgres:
-            pg_sql = sql.replace("?", "%s")
-            if "INSERT OR IGNORE INTO" in pg_sql:
-                pg_sql = pg_sql.replace("INSERT OR IGNORE INTO", "INSERT INTO")
-                if "ON CONFLICT" not in pg_sql:
-                    pg_sql += " ON CONFLICT DO NOTHING"
-            with self._pg_cursor() as cur:
-                cur.execute(pg_sql, params)
-                return cur.rowcount
-        else:
+            try:
+                pg_sql = sql.replace("?", "%s")
+                if "INSERT OR IGNORE INTO" in pg_sql:
+                    pg_sql = pg_sql.replace("INSERT OR IGNORE INTO", "INSERT INTO")
+                    if "ON CONFLICT" not in pg_sql:
+                        pg_sql += " ON CONFLICT DO NOTHING"
+                with self._pg_cursor() as cur:
+                    cur.execute(pg_sql, params)
+                    affected = cur.rowcount
+            except Exception as e:
+                logger.warning("PostgreSQL execute fallback to SQLite: %s", e)
+
+        # Always mirror writes to SQLite for resilience
+        try:
             conn = sqlite3.connect(self.sqlite_path)
             cur = conn.cursor()
             cur.execute(sql, params)
             conn.commit()
-            affected = cur.rowcount
+            if not self.is_postgres:
+                affected = cur.rowcount
             conn.close()
-            return affected
+        except Exception as sqle:
+            logger.error("SQLite execute failed: %s", sqle)
+
+        return affected
 
     def _init_postgres(self):
         """Initializes Supabase Cloud PostgreSQL tables, indexes, and default records."""

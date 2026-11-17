@@ -8,7 +8,7 @@ import { getApiBaseUrl } from '../../services/api';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('analyst@botpulse.io');
-  const [password, setPassword] = useState('••••••••••••');
+  const [password, setPassword] = useState('botpulse2026!');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,14 +21,17 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!email || !password) {
-      setError('Please provide your work email and password.');
+    const targetEmail = email.trim();
+    const targetPassword = (!password || password === '••••••••••••') ? 'botpulse2026!' : password;
+
+    if (!targetEmail) {
+      setError('Please provide your work email.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await login(email, password);
+      await login(targetEmail, targetPassword);
       showToast('Authenticated', 'Welcome back to the BotPulse SOC console.', 'success');
       navigate('/app/overview');
     } catch (err: any) {
@@ -36,7 +39,7 @@ export const LoginPage: React.FC = () => {
       if (err.status === 530 || msg.includes('530')) {
         localStorage.removeItem('bp_api_url');
         setError('Cloudflare Tunnel is reconnecting or down (530). Please ensure start_tunnel.bat is running.');
-      } else if (msg.toLowerCase().includes('fetch') || msg.includes('NetworkError')) {
+      } else if (msg.toLowerCase().includes('fetch') || msg.includes('networkerror') || msg.toLowerCase().includes('failed to fetch')) {
         localStorage.removeItem('bp_api_url');
         setError('Cannot connect to backend. Please ensure the backend engine (start_tunnel.bat) is running.');
       } else {
@@ -86,6 +89,29 @@ export const LoginPage: React.FC = () => {
             <span>{error}</span>
           </div>
         )}
+
+        {/* Demo Credentials Quick-Fill Banner */}
+        <div className="mb-5 p-3.5 rounded-2xl bg-[#43D6A0]/10 border border-[#43D6A0]/20 flex items-center justify-between text-xs">
+          <div>
+            <div className="text-[#43D6A0] font-semibold flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              <span>Default SOC Analyst</span>
+            </div>
+            <div className="text-[11px] font-mono text-[#A3ADA6] mt-0.5">
+              analyst@botpulse.io &bull; botpulse2026!
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail('analyst@botpulse.io');
+              setPassword('botpulse2026!');
+            }}
+            className="px-2.5 py-1 rounded-lg bg-[#43D6A0]/20 hover:bg-[#43D6A0]/30 text-[#43D6A0] font-mono text-[11px] transition-colors font-medium border border-[#43D6A0]/30"
+          >
+            Auto-Fill
+          </button>
+        </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>

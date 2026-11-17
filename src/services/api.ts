@@ -20,10 +20,15 @@ export function getApiBaseUrl(): string {
       }
     } catch {}
 
-    // 2. Check saved localStorage (configured via Configure Engine)
+    // 2. Check saved localStorage (configured via Configure Engine or past session)
     const saved = localStorage.getItem('bp_api_url');
     if (saved && saved.trim() !== '') {
-      return saved.replace(/\/+$/, '');
+      // If it's an expired/stale Cloudflare Tunnel that differs from active one, purge it
+      if (saved.includes('trycloudflare.com') && !saved.startsWith(DEFAULT_TUNNEL_API.split('/api')[0])) {
+        localStorage.removeItem('bp_api_url');
+      } else {
+        return saved.replace(/\/+$/, '');
+      }
     }
 
     // 3. If running on Vercel or any production host, use same-origin /api/v1 (proxied by vercel.json)

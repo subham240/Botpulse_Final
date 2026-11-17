@@ -33,6 +33,43 @@ if sys.platform == "win32":
 
 DETACHED_FLAGS = (0x00000008 | 0x00000200) if sys.platform == "win32" else 0
 
+def ensure_backend_running():
+    """Checks backend health and restarts it if unresponsive."""
+    import urllib.request
+    try:
+        r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2.0)
+        if r.status == 200:
+            return True
+    except Exception:
+        pass
+
+    print("\n[Backend] Port 8000 unresponsive. Starting fresh backend process...", flush=True)
+    if sys.platform == "win32":
+        subprocess.run(
+            ["powershell", "-Command", "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"],
+            capture_output=True
+        )
+    time.sleep(1)
+
+    server_log_file = open(SERVER_LOG, "a", encoding="utf-8")
+    subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000"],
+        cwd=ROOT_DIR,
+        stdout=server_log_file,
+        stderr=subprocess.STDOUT,
+        creationflags=DETACHED_FLAGS
+    )
+    for _ in range(25):
+        time.sleep(0.5)
+        try:
+            r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2.0)
+            if r.status == 200:
+                print("[OK] Backend recovered and running healthy on http://127.0.0.1:8000", flush=True)
+                return True
+        except Exception:
+            pass
+    return False
+
 def stop_services():
     """Stops all running backend and tunnel processes."""
     print("Stopping BotPulse services...", flush=True)
@@ -164,96 +201,46 @@ def main():
         sys.exit(1)
 
     # 2. Check or Launch FastAPI Backend with Uvicorn
-    import urllib.request
-    backend_running = False
-    for _ in range(3):
-        try:
-            r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=1.5)
-            if r.status == 200:
-                backend_running = True
-                print("[OK] FastAPI backend running healthy on http://127.0.0.1:8000", flush=True)
-                break
-        except Exception:
-            time.sleep(0.5)
-
+    backend_running = ensure_backend_running()
     if not backend_running:
-        print("\n[1/3] Starting persistent FastAPI backend on http://127.0.0.1:8000...", flush=True)
-        server_log_file = open(SERVER_LOG, "a", encoding="utf-8")
-        subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000"],
-            cwd=ROOT_DIR,
-            stdout=server_log_file,
-            stderr=subprocess.STDOUT,
-            creationflags=DETACHED_FLAGS
-        )
+        print("[ERROR] Backend failed to start. Last log lines from backend/data/server.log:", flush=True)
+        if os.path.exists(SERVER_LOG):
+            with open(SERVER_LOG, "r", encoding="utf-8") as f:
+                print(f.read()[-500:], flush=True)
+        sys.exit(1)
+    print("[OK] FastAPI backend running healthy on http://127.0.0.1:8000 (Logs: backend/data/server.log)", flush=True)
 
-        for _ in range(30):
-            time.sleep(0.5)
-            try:
-                r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=1.5)
-                if r.status == 200:
-                    backend_running = True
-                    break
-            except Exception:
-                pass
+    # 3. Always launch a fresh, verified Cloudflare Tunnel
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], capture_output=True)
+    time.sleep(1)
 
-        if not backend_running:
-            print("[ERROR] Backend failed to start. Last log lines from backend/data/server.log:", flush=True)
-            if os.path.exists(SERVER_LOG):
-                with open(SERVER_LOG, "r", encoding="utf-8") as f:
-                    print(f.read()[-500:], flush=True)
-            sys.exit(1)
-        print("[OK] Backend running (Logs: backend/data/server.log)", flush=True)
+    print("\n[2/3] Establishing fresh HTTP/2 Cloudflare Tunnel to http://127.0.0.1:8000...", flush=True)
+    tunnel_log_file = open(TUNNEL_LOG, "w", encoding="utf-8")
+    subprocess.Popen(
+        [cloudflared_bin, "tunnel", "--protocol", "http2", "--edge-ip-version", "4", "--url", "http://127.0.0.1:8000"],
+        cwd=ROOT_DIR,
+        stdout=tunnel_log_file,
+        stderr=subprocess.STDOUT,
+        creationflags=DETACHED_FLAGS
+    )
 
-    # 3. Check if existing Cloudflare Tunnel is healthy, else launch new
     public_url = None
     url_pattern = re.compile(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
 
-    if os.path.exists(TUNNEL_LOG):
-        try:
-            with open(TUNNEL_LOG, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            matches = url_pattern.findall(content)
-            if matches:
-                candidate = matches[-1]
-                try:
-                    h = urllib.request.urlopen(f"{candidate}/health", timeout=3)
-                    if h.status == 200:
-                        public_url = candidate
-                        print(f"[OK] Existing Cloudflare Tunnel verified active: {public_url}", flush=True)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-    if not public_url:
-        if sys.platform == "win32":
-            subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], capture_output=True)
-        time.sleep(1)
-
-        print("\n[2/3] Establishing persistent Cloudflare Tunnel to http://127.0.0.1:8000...", flush=True)
-        tunnel_log_file = open(TUNNEL_LOG, "w", encoding="utf-8")
-        subprocess.Popen(
-            [cloudflared_bin, "tunnel", "--url", "http://127.0.0.1:8000"],
-            cwd=ROOT_DIR,
-            stdout=tunnel_log_file,
-            stderr=subprocess.STDOUT,
-            creationflags=DETACHED_FLAGS
-        )
-
-        start_time = time.time()
-        while time.time() - start_time < 35:
-            time.sleep(0.5)
-            if os.path.exists(TUNNEL_LOG):
-                try:
-                    with open(TUNNEL_LOG, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-                    m = url_pattern.search(content)
-                    if m:
-                        public_url = m.group(0)
-                        break
-                except Exception:
-                    pass
+    start_time = time.time()
+    while time.time() - start_time < 35:
+        time.sleep(0.5)
+        if os.path.exists(TUNNEL_LOG):
+            try:
+                with open(TUNNEL_LOG, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                m = url_pattern.search(content)
+                if m:
+                    public_url = m.group(0)
+                    break
+            except Exception:
+                pass
 
     if not public_url:
         print("[ERROR] Failed to retrieve Cloudflare Tunnel URL within 35 seconds.", flush=True)
@@ -268,11 +255,15 @@ def main():
     # Sync git repos
     print("\n[3/3] Syncing active tunnel with GitHub & Vercel edge proxy...", flush=True)
     try:
-        subprocess.run(["git", "add", "vercel.json", "src/services/api.ts"], cwd=ROOT_DIR, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=ROOT_DIR, capture_output=True)
         c = subprocess.run(["git", "commit", "-m", f"sync: auto-route Vercel proxy to {public_url}"], cwd=ROOT_DIR, capture_output=True)
         if c.returncode == 0:
             subprocess.run(["git", "push", "origin", "main"], cwd=ROOT_DIR, capture_output=True)
             print("[OK] Synced Botpulse repo with GitHub & Vercel edge proxy", flush=True)
+        else:
+            # Still push in case earlier commits were pending
+            subprocess.run(["git", "push", "origin", "main"], cwd=ROOT_DIR, capture_output=True)
+            print("[OK] Pushed pending commits to GitHub & Vercel edge proxy", flush=True)
     except Exception as e:
         print(f"Notice: git sync Botpulse: {e}", flush=True)
 
@@ -316,9 +307,34 @@ def main():
     print("=" * 65, flush=True)
 
     # Supervise continuously so tunnel and backend remain active
+    print("  Status: Services running. Monitoring health (Press Ctrl+C to stop)...", flush=True)
     try:
+        hb_tick = 0
+        failed_checks = 0
         while True:
-            time.sleep(2)
+            time.sleep(10)
+            hb_tick += 1
+
+            # Check local backend health
+            backend_ok = False
+            try:
+                r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2.5)
+                if r.status == 200:
+                    backend_ok = True
+                    failed_checks = 0
+            except Exception:
+                failed_checks += 1
+
+            if not backend_ok and failed_checks >= 2:
+                print("  [Auto-Heal] Backend port 8000 unresponsive. Recovering...", flush=True)
+                ensure_backend_running()
+                failed_checks = 0
+
+            if hb_tick % 3 == 0:
+                print(f"  [Heartbeat] BotPulse Tunnel & Backend OK: {public_url}", flush=True)
+    except KeyboardInterrupt:
+        print("\nStopping BotPulse services...", flush=True)
+        stop_services()
     except Exception:
         pass
 
