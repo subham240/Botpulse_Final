@@ -4,9 +4,9 @@
  */
 
 export function getApiBaseUrl(): string {
-  const DEFAULT_TUNNEL_API = 'https://venice-purposes-officers-classic.trycloudflare.com/api/v1';
+  const DEFAULT_AWS_API = 'http://54.174.210.57:8000/api/v1';
   const meta = import.meta as any;
-  const ENV_API = (meta && meta.env && meta.env.VITE_API_URL) ? meta.env.VITE_API_URL : DEFAULT_TUNNEL_API;
+  const ENV_API = (meta && meta.env && meta.env.VITE_API_URL) ? meta.env.VITE_API_URL : DEFAULT_AWS_API;
 
   if (typeof window !== 'undefined') {
     // 1. Explicit query param ?api=... overrides everything and persists
@@ -32,8 +32,8 @@ export function getApiBaseUrl(): string {
     }
   }
 
-  // 4. Default: Active Cloudflare Tunnel endpoint
-  return ENV_API || DEFAULT_TUNNEL_API;
+  // 4. Default: Active AWS Production Endpoint
+  return ENV_API || DEFAULT_AWS_API;
 }
 
 export interface ApiUser {

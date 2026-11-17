@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend source code and configuration
 COPY backend/ ./backend/
 
+# Copy pre-built frontend distribution
+COPY dist/ ./dist/
+
 EXPOSE 8000
 
 ENV PORT=8000

@@ -5,27 +5,27 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/api/v1/:path*"
+      "destination": "http://54.174.210.57:8000/api/v1/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/api/:path*"
+      "destination": "http://54.174.210.57:8000/api/:path*"
     },
     {
       "source": "/events",
-      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/api/v1/events"
+      "destination": "http://54.174.210.57:8000/api/v1/events"
     },
     {
       "source": "/telemetry/:path*",
-      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/api/v1/telemetry/:path*"
+      "destination": "http://54.174.210.57:8000/api/v1/telemetry/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/health"
+      "destination": "http://54.174.210.57:8000/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://venice-purposes-officers-classic.trycloudflare.com/botpulse.js"
+      "destination": "http://54.174.210.57:8000/botpulse.js"
     },
     {
       "source": "/(.*)",
