@@ -5,27 +5,27 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://ignored-belle-suspension-architectural.trycloudflare.com/api/v1/:path*"
+      "destination": "https://roller-duplicate-prospects-becoming.trycloudflare.com/api/v1/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://ignored-belle-suspension-architectural.trycloudflare.com/api/:path*"
+      "destination": "https://roller-duplicate-prospects-becoming.trycloudflare.com/api/:path*"
     },
     {
       "source": "/events",
-      "destination": "https://ignored-belle-suspension-architectural.trycloudflare.com/api/v1/events"
+      "destination": "https://roller-duplicate-prospects-becoming.trycloudflare.com/api/v1/events"
     },
     {
       "source": "/telemetry/:path*",
-      "destination": "https://ignored-belle-suspension-architectural.trycloudflare.com/api/v1/telemetry/:path*"
+      "destination": "https://roller-duplicate-prospects-becoming.trycloudflare.com/api/v1/telemetry/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://ignored-belle-suspension-architectural.trycloudflare.com/health"
+      "destination": "https://roller-duplicate-prospects-becoming.trycloudflare.com/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://ignored-belle-suspension-architectural.trycloudflare.com/botpulse.js"
+      "destination": "https://roller-duplicate-prospects-becoming.trycloudflare.com/botpulse.js"
     },
     {
       "source": "/(.*)",

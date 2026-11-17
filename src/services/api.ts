@@ -4,9 +4,13 @@
  */
 
 export function getApiBaseUrl(): string {
-  const DEFAULT_TUNNEL_API = 'https://ignored-belle-suspension-architectural.trycloudflare.com/api/v1';
+  const DEFAULT_TUNNEL_API = 'https://roller-duplicate-prospects-becoming.trycloudflare.com/api/v1';
 
   if (typeof window !== 'undefined') {
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
     // 1. Explicit query param ?api=... overrides everything
     try {
       const params = new URLSearchParams(window.location.search);
@@ -21,17 +25,10 @@ export function getApiBaseUrl(): string {
     // 2. Check saved localStorage
     const saved = localStorage.getItem('bp_api_url');
     if (saved && saved.trim() !== '') {
-      // If saved is an old dead trycloudflare tunnel, purge it!
-      if (
-        saved.includes('belfast-estate-round-budapest') ||
-        saved.includes('refused-them-pharmacology-completion')
-      ) {
+      // If running locally, never route through an external ephemeral cloudflare tunnel
+      if (isLocalhost && saved.includes('trycloudflare.com')) {
         localStorage.removeItem('bp_api_url');
-      } else if (
-        window.location.hostname !== 'localhost' &&
-        window.location.hostname !== '127.0.0.1' &&
-        (saved.includes('127.0.0.1') || saved.includes('localhost'))
-      ) {
+      } else if (!isLocalhost && (saved.includes('127.0.0.1') || saved.includes('localhost'))) {
         localStorage.removeItem('bp_api_url');
       } else {
         return saved.replace(/\/+$/, '');
@@ -39,7 +36,7 @@ export function getApiBaseUrl(): string {
     }
 
     // 3. If running on Vercel or any production host, use same-origin /api/v1 (proxied by vercel.json)
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    if (!isLocalhost) {
       return '/api/v1';
     }
   }
