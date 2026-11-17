@@ -5,27 +5,27 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://wanted-hunting-secretariat-vista.trycloudflare.com/api/v1/:path*"
+      "destination": "https://witness-calculations-evening-life.trycloudflare.com/api/v1/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://wanted-hunting-secretariat-vista.trycloudflare.com/api/:path*"
+      "destination": "https://witness-calculations-evening-life.trycloudflare.com/api/:path*"
     },
     {
       "source": "/events",
-      "destination": "https://wanted-hunting-secretariat-vista.trycloudflare.com/api/v1/events"
+      "destination": "https://witness-calculations-evening-life.trycloudflare.com/api/v1/events"
     },
     {
       "source": "/telemetry/:path*",
-      "destination": "https://wanted-hunting-secretariat-vista.trycloudflare.com/api/v1/telemetry/:path*"
+      "destination": "https://witness-calculations-evening-life.trycloudflare.com/api/v1/telemetry/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://wanted-hunting-secretariat-vista.trycloudflare.com/health"
+      "destination": "https://witness-calculations-evening-life.trycloudflare.com/health"
     },
     {
       "source": "/botpulse.js",
-      "destination": "https://wanted-hunting-secretariat-vista.trycloudflare.com/botpulse.js"
+      "destination": "https://witness-calculations-evening-life.trycloudflare.com/botpulse.js"
     },
     {
       "source": "/(.*)",
