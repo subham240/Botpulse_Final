@@ -6,15 +6,6 @@ Processes run detached from this script so they persist across agent turns and r
 import sys
 import os
 
-if sys.platform == "win32":
-    try:
-        if hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        if hasattr(sys.stderr, "reconfigure"):
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
-
 import re
 import time
 import shutil
@@ -25,6 +16,20 @@ LOG_DIR = os.path.join(ROOT_DIR, "backend", "data")
 os.makedirs(LOG_DIR, exist_ok=True)
 SERVER_LOG = os.path.join(LOG_DIR, "server.log")
 TUNNEL_LOG = os.path.join(LOG_DIR, "tunnel.log")
+
+if sys.platform == "win32":
+    try:
+        if sys.stdout is None or not hasattr(sys.stdout, "write"):
+            _log_file = open(os.path.join(ROOT_DIR, "launcher.log"), "a", encoding="utf-8")
+            sys.stdout = _log_file
+            sys.stderr = _log_file
+        else:
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            if hasattr(sys.stderr, "reconfigure"):
+                sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 DETACHED_FLAGS = (0x00000008 | 0x00000200) if sys.platform == "win32" else 0
 
@@ -308,7 +313,6 @@ def main():
     print("=" * 65, flush=True)
     print("  Status: Both FastAPI and Cloudflare Tunnel are running persistently", flush=True)
     print("          as independent Windows background processes.", flush=True)
-    print("          They will remain online continuously without interruption.", flush=True)
     print("=" * 65, flush=True)
 
     # Supervise continuously so tunnel and backend remain active

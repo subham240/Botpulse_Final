@@ -33,9 +33,12 @@ export const LoginPage: React.FC = () => {
       navigate('/app/overview');
     } catch (err: any) {
       const msg = err.message || '';
-      if (msg.toLowerCase().includes('fetch') || msg.includes('NetworkError') || err.status === 530) {
+      if (err.status === 530 || msg.includes('530')) {
         localStorage.removeItem('bp_api_url');
-        setError('Tunnel endpoint reset to active proxy. Please click Sign In again.');
+        setError('Cloudflare Tunnel is reconnecting or down (530). Please ensure start_tunnel.bat is running.');
+      } else if (msg.toLowerCase().includes('fetch') || msg.includes('NetworkError')) {
+        localStorage.removeItem('bp_api_url');
+        setError('Cannot connect to backend. Please ensure the backend engine (start_tunnel.bat) is running.');
       } else {
         setError(msg || 'Authentication failed. Please check your credentials.');
       }
