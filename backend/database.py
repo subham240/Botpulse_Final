@@ -53,52 +53,52 @@ class DatabaseManager:
         """Attempts connection to Supabase PostgreSQL, then MongoDB; falls back to SQLite."""
         # 1. Check for Supabase Cloud PostgreSQL connection string
         supabase_db_url = settings.SUPABASE_DB_URL or os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-        if not supabase_db_url:
-            supabase_db_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require"
 
         if supabase_db_url and ("postgres" in supabase_db_url.lower()):
+            clean_url = supabase_db_url.strip().strip("'\"")
+            if clean_url.startswith("postgres://"):
+                clean_url = "postgresql://" + clean_url[len("postgres://"):]
+            if "sslmode=" not in clean_url:
+                clean_url += ("&" if "?" in clean_url else "?") + "sslmode=require"
+            if "connect_timeout=" not in clean_url:
+                clean_url += ("&" if "?" in clean_url else "?") + "connect_timeout=3&keepalives=1&keepalives_idle=20&keepalives_interval=5&keepalives_count=3"
+
+            # Quick 0.8s socket pre-flight probe to avoid 20s TCP freeze on unreachable hosts
+            import socket
+            can_connect = False
             try:
-                import psycopg2
-                from psycopg2 import pool
-                from psycopg2.extras import RealDictCursor
-                
-                clean_url = supabase_db_url.strip().strip("'\"")
-                if clean_url.startswith("postgres://"):
-                    clean_url = "postgresql://" + clean_url[len("postgres://"):]
-                if "sslmode=" not in clean_url:
-                    clean_url += ("&" if "?" in clean_url else "?") + "sslmode=require"
-                if "connect_timeout=" not in clean_url:
-                    clean_url += ("&" if "?" in clean_url else "?") + "connect_timeout=4&keepalives=1&keepalives_idle=20&keepalives_interval=5&keepalives_count=3"
+                parsed = urlparse(clean_url)
+                host = parsed.hostname
+                port = parsed.port or 5432
+                if host:
+                    s = socket.create_connection((host, port), timeout=0.8)
+                    s.close()
+                    can_connect = True
+            except Exception:
+                can_connect = False
 
-                # Prefer IPv4 Transaction Pooler (port 6543) which has no 15-client session limits
-                clean_url = clean_url.replace(":5432/", ":6543/").replace(":5432?", ":6543?")
-                pooler_url = "postgresql://postgres.iexxzljqbwmymxytkocw:Subham%40112005@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=4&keepalives=1&keepalives_idle=20&keepalives_interval=5&keepalives_count=3"
-                urls_to_try = [clean_url]
-                if pooler_url not in urls_to_try:
-                    urls_to_try.append(pooler_url)
-
-                connected = False
-                for target_url in urls_to_try:
-                    try:
-                        logger.info("Connecting to Supabase PostgreSQL database...")
-                        self.pg_pool = pool.ThreadedConnectionPool(
-                            minconn=2,
-                            maxconn=30,
-                            dsn=target_url
-                        )
-                        self._active_pg_url = target_url
-                        self.is_postgres = True
-                        self._init_postgres()
-                        logger.info("Connected successfully to Supabase Cloud PostgreSQL!")
-                        connected = True
-                        return
-                    except Exception as try_err:
-                        logger.warning("Supabase endpoint attempt failed: %s", try_err)
-
-                if not connected:
-                    raise Exception("All Supabase connection endpoints failed.")
-            except Exception as e:
-                logger.warning("Supabase PostgreSQL connection failed: %s. Falling back to local storage.", e)
+            if can_connect:
+                try:
+                    import psycopg2
+                    from psycopg2 import pool
+                    from psycopg2.extras import RealDictCursor
+                    logger.info("Connecting to Supabase PostgreSQL database...")
+                    self.pg_pool = pool.ThreadedConnectionPool(
+                        minconn=2,
+                        maxconn=20,
+                        dsn=clean_url
+                    )
+                    self._active_pg_url = clean_url
+                    self.is_postgres = True
+                    self._init_postgres()
+                    logger.info("Connected successfully to Supabase Cloud PostgreSQL!")
+                    return
+                except Exception as e:
+                    logger.warning("Supabase PostgreSQL pool initialization failed: %s. Using persistent SQLite.", e)
+                    self.is_postgres = False
+                    self.pg_pool = None
+            else:
+                logger.info("Supabase PostgreSQL host unreachable (0.8s pre-flight probe). Using fast persistent SQLite.")
                 self.is_postgres = False
                 self.pg_pool = None
 
@@ -107,7 +107,7 @@ class DatabaseManager:
         if not is_serverless or settings.MONGODB_URI != "mongodb://localhost:27017":
             try:
                 import pymongo
-                timeout = 500 if is_serverless else 2000
+                timeout = 300
                 client = pymongo.MongoClient(settings.MONGODB_URI, serverSelectionTimeoutMS=timeout)
                 client.admin.command('ping')
                 self.mongo_client = client
@@ -205,6 +205,7 @@ class DatabaseManager:
                     return self._clean_row(row)
             except Exception as e:
                 logger.warning("PostgreSQL query_one fallback to SQLite: %s", e)
+                self.is_postgres = False
 
         try:
             conn = sqlite3.connect(self.sqlite_path)
@@ -228,6 +229,7 @@ class DatabaseManager:
                     return [self._clean_row(r) for r in cur.fetchall()]
             except Exception as e:
                 logger.warning("PostgreSQL query_all fallback to SQLite: %s", e)
+                self.is_postgres = False
 
         try:
             conn = sqlite3.connect(self.sqlite_path)
@@ -1116,8 +1118,10 @@ class DatabaseManager:
                 }
 
             if trend_buckets:
-                min_b = min(trend_buckets.keys())
                 max_b = max(trend_buckets.keys())
+                max_points = 24 if is_hourly else (7 if time_range == "7d" else 30)
+                min_b = max_b - (max_points - 1) * interval_ms
+
                 curr = min_b
                 while curr <= max_b:
                     if curr not in trend_buckets:
@@ -1134,7 +1138,9 @@ class DatabaseManager:
                         }
                     curr += interval_ms
 
-            traffic_trend = sorted(trend_buckets.values(), key=lambda x: x["timestamp"])
+            all_sorted_buckets = sorted(trend_buckets.values(), key=lambda x: x["timestamp"])
+            max_points = 24 if is_hourly else (7 if time_range == "7d" else 30)
+            traffic_trend = all_sorted_buckets[-max_points:] if len(all_sorted_buckets) > max_points else all_sorted_buckets
 
             # Top Active Pages
             pages_sql = f"""

@@ -36,8 +36,9 @@ DETACHED_FLAGS = (0x00000008 | 0x00000200) if sys.platform == "win32" else 0
 def ensure_backend_running():
     """Checks backend health and restarts it if unresponsive."""
     import urllib.request
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2.0)
+        r = opener.open("http://127.0.0.1:8000/health", timeout=3.0)
         if r.status == 200:
             return True
     except Exception:
@@ -62,7 +63,7 @@ def ensure_backend_running():
     for _ in range(25):
         time.sleep(0.5)
         try:
-            r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2.0)
+            r = opener.open("http://127.0.0.1:8000/health", timeout=3.0)
             if r.status == 200:
                 print("[OK] Backend recovered and running healthy on http://127.0.0.1:8000", flush=True)
                 return True
