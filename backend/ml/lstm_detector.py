@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import math
 import time
@@ -9,7 +10,7 @@ try:
     import torch
     import torch.nn as nn
     TORCH_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception):
     torch = None
     nn = None
     TORCH_AVAILABLE = False
@@ -19,41 +20,47 @@ from backend.config import settings
 
 logger = logging.getLogger("botpulse.ml.lstm")
 
-class BiLSTMBehavioralClassifier(nn.Module if TORCH_AVAILABLE and nn is not None else object):
-    """
-    Stage 2: Bidirectional LSTM Behavioral Sequencer.
-    Models long-range temporal dependencies in mouse kinematics.
-    """
-    def __init__(self, input_dim: int = 9, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.2):
-        super().__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
+if TORCH_AVAILABLE and nn is not None:
+    class BiLSTMBehavioralClassifier(nn.Module):
+        """
+        Stage 2: Bidirectional LSTM Behavioral Sequencer.
+        Models long-range temporal dependencies in mouse kinematics.
+        """
+        def __init__(self, input_dim: int = 9, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.2):
+            super().__init__()
+            self.input_dim = input_dim
+            self.hidden_dim = hidden_dim
+            self.num_layers = num_layers
 
-        self.lstm = nn.LSTM(
-            input_size=input_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
-            batch_first=True,
-            bidirectional=True,
-            dropout=dropout if num_layers > 1 else 0.0
-        )
-        self.classifier = nn.Sequential(
-            nn.Linear(hidden_dim * 2, 64),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(32, 1)
-        )
+            self.lstm = nn.LSTM(
+                input_size=input_dim,
+                hidden_size=hidden_dim,
+                num_layers=num_layers,
+                batch_first=True,
+                bidirectional=True,
+                dropout=dropout if num_layers > 1 else 0.0
+            )
+            self.classifier = nn.Sequential(
+                nn.Linear(hidden_dim * 2, 64),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.Linear(64, 32),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.Linear(32, 1)
+            )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x shape: [batch_size, seq_len, input_dim]
-        out, _ = self.lstm(x)
-        pooled = torch.mean(out, dim=1)
-        logits = self.classifier(pooled)
-        return logits.squeeze(-1)
+        def forward(self, x: Any) -> Any:
+            # x shape: [batch_size, seq_len, input_dim]
+            out, _ = self.lstm(x)
+            pooled = torch.mean(out, dim=1)
+            logits = self.classifier(pooled)
+            return logits.squeeze(-1)
+else:
+    class BiLSTMBehavioralClassifier:
+        """Fallback stub when PyTorch is not installed in runtime environment."""
+        def __init__(self, *args, **kwargs):
+            pass
 
 
 class LSTMDetector:
