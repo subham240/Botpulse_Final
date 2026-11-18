@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Body, HTTPException
 from typing import Dict, Any, Optional
+from backend.config import settings
 from backend.schemas.prevention import EnforcementFeedbackPayload, PreventionPolicy
 from backend.services.prevention_service import prevention_service
+from backend.services.resemble_client import resemble_client
 from backend.core.crypto import generate_pow_challenge, validate_pow_difficulty
 from backend.database import db
 
@@ -70,3 +72,64 @@ def get_pow_statistics(site_id: str = "site_alvera_001"):
     Returns aggregated metrics on Proof-of-Work challenges solved by verified devices.
     """
     return db.get_pow_stats(site_id=site_id)
+
+@router.get("/resemble/status")
+def get_resemble_status():
+    """Checks server-side Resemble.AI RAD-S1 API connectivity."""
+    return {
+        "resemble_status": resemble_client.check_status(),
+        "site_id": settings.RESEMBLE_SITE_ID,
+        "configured": resemble_client.is_configured
+    }
+
+@router.get("/resemble/session/{resemble_sid}")
+def lookup_resemble_session(resemble_sid: str):
+    """Server-side lookup of a Resemble.AI session verdict (keeps API token secret)."""
+    if not resemble_client.is_configured:
+        raise HTTPException(status_code=503, detail="RESEMBLE_API_TOKEN is not configured on backend.")
+    item = resemble_client.fetch_session(resemble_sid)
+    if not item:
+        raise HTTPException(status_code=404, detail="Session not found in Resemble.AI.")
+    return {
+        "session_id": resemble_sid,
+        "settled": item.get("settled"),
+        "visitor_class": item.get("visitor_class"),
+        "p_person": item.get("p_person"),
+        "action": item.get("action"),
+        "duration_s": item.get("duration_s"),
+        "settled_at": item.get("settled_at"),
+        "raw": item
+    }
+
+@router.post("/resemble/sync")
+def sync_resemble_sessions():
+    """Syncs recent settled Human / AI Agent sessions from Resemble.AI API into BotPulse."""
+    if not resemble_client.is_configured:
+        raise HTTPException(status_code=503, detail="RESEMBLE_API_TOKEN is not configured on backend.")
+    items = resemble_client.fetch_recent_sessions(limit=50)
+    synced = 0
+    for item in items:
+        sid = item.get("sid")
+        settled = str(item.get("settled") or "").strip().lower()
+        if not sid or settled not in ("human", "agent"):
+            continue
+        is_agent = settled == "agent"
+        db.save_session({
+            "session_id": f"resemble_{sid}",
+            "site_key": settings.DEFAULT_SITE_KEY,
+            "visitor_id": f"res_{sid[:8]}",
+            "ip": "Resemble-Edge",
+            "user_agent": item.get("visitor_class") or "Resemble.AI Verified Session",
+            "category": "ai_agent" if is_agent else "human",
+            "risk_score": 42.0 if is_agent else 5.0,
+            "risk_level": "moderate" if is_agent else "low",
+            "enforcement": "verify" if is_agent else "allow",
+            "event_count": 1,
+            "reasons": [
+                "RESEMBLE_SERVER_VERIFIED",
+                "RESEMBLE_AI_AGENT_VERDICT" if is_agent else "RESEMBLE_AI_HUMAN_VERDICT"
+            ],
+            "metrics": {"p_person": item.get("p_person"), "duration_s": item.get("duration_s")}
+        })
+        synced += 1
+    return {"success": True, "fetched": len(items), "synced": synced}

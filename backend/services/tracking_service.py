@@ -19,6 +19,9 @@ class TrackingService:
     and returns signed decision tokens.
     """
 
+    def __init__(self):
+        self._session_resemble_verdicts: Dict[str, Dict[str, Any]] = {}
+
     def process_telemetry_batch(self, batch_data: Dict[str, Any], client_ip: str = "127.0.0.1") -> Dict[str, Any]:
         site_key = batch_data.get("site_key", settings.DEFAULT_SITE_KEY)
         session_id = batch_data.get("session_id", f"sess_{uuid.uuid4().hex[:10]}")
@@ -31,6 +34,19 @@ class TrackingService:
             session_metadata["gemini_api_key"] = batch_data.get("gemini_api_key")
         if batch_data.get("api_key"):
             session_metadata["api_key"] = batch_data.get("api_key")
+
+        # Persist and apply latest Resemble.AI verdict for this session (supports mid-visit handovers)
+        incoming_resemble = batch_data.get("resemble_verdict") or session_metadata.get("resemble_verdict")
+        if not incoming_resemble:
+            for ev in reversed(raw_events):
+                if ev.get("event_type") == "resemble_verdict" and isinstance(ev.get("payload"), dict):
+                    incoming_resemble = ev["payload"]
+                    break
+        if isinstance(incoming_resemble, dict) and incoming_resemble.get("verdict"):
+            self._session_resemble_verdicts[session_id] = incoming_resemble
+            session_metadata["resemble_verdict"] = incoming_resemble
+        elif session_id in self._session_resemble_verdicts:
+            session_metadata["resemble_verdict"] = self._session_resemble_verdicts[session_id]
 
         # 1. Update In-memory Event Buffer for Session
         buffered_events = session_service.buffer_events(session_id, raw_events)

@@ -2,6 +2,8 @@ import time
 import logging
 from typing import Dict, Any, List, Optional
 
+from backend.services.resemble_client import resemble_client
+
 logger = logging.getLogger("botpulse.ml.rad_s1")
 
 class RADS1Detector:
@@ -142,12 +144,56 @@ class RADS1Detector:
                 reason_codes.append("DECLARED_AI_SIGNATURE")
 
         # ----------------------------------------------------------------------
-        # 3. Resemble AI / Generic Agent Token Verification
+        # 3. Resemble.AI Live Verdict & Token Verification (Human & AI Agent)
         # ----------------------------------------------------------------------
+        resemble_verdict_raw = session_metadata.get("resemble_verdict")
+        resemble_verdict_label = None
+        resemble_human_verified = False
+
+        if isinstance(resemble_verdict_raw, dict) and resemble_verdict_raw.get("verdict"):
+            rv = str(resemble_verdict_raw.get("verdict", "")).strip().lower()
+            rv_kind = resemble_verdict_raw.get("kind")
+            rv_operator = resemble_verdict_raw.get("operator")
+            rv_classification = resemble_verdict_raw.get("classification")
+            rv_sid = resemble_verdict_raw.get("sessionId") or resemble_verdict_raw.get("sid")
+            server_verified_item = None
+
+            # If RESEMBLE_API_TOKEN is configured on the server, verify & enrich verdict authoritatively
+            if rv_sid and resemble_client.is_configured:
+                server_verified_item = resemble_client.fetch_session(str(rv_sid))
+                if isinstance(server_verified_item, dict):
+                    settled = str(server_verified_item.get("settled") or "").strip().lower()
+                    if settled in ("human", "agent", "review"):
+                        rv = settled
+                    if server_verified_item.get("visitor_class"):
+                        rv_kind = server_verified_item.get("visitor_class")
+                    reason_codes.append("RESEMBLE_SERVER_VERIFIED")
+                    if server_verified_item.get("p_person") is not None:
+                        evidence.append(f"Resemble server API p_person={server_verified_item.get('p_person')}")
+
+            if rv == "agent":
+                resemble_verdict_label = "agent"
+                agent_descriptor = rv_operator or rv_kind or rv_classification or "Autonomous AI Agent"
+                detected_family = detected_family or f"Resemble.AI ({agent_descriptor})"
+                detected_agent = rv_kind or "Autonomous AI Agent"
+                evidence.append(f"Resemble.AI classified session as AI Agent ({agent_descriptor})")
+                reason_codes.append("RESEMBLE_AI_AGENT_VERDICT")
+                reason_codes.append("RESEMBLE_AI_VERIFIED")
+            elif rv == "human":
+                resemble_verdict_label = "human"
+                resemble_human_verified = True
+                evidence.append("Resemble.AI verified natural human browser interaction")
+                reason_codes.append("RESEMBLE_AI_HUMAN_VERDICT")
+                reason_codes.append("RESEMBLE_AI_VERIFIED")
+            elif rv == "review":
+                resemble_verdict_label = "review"
+                evidence.append("Resemble.AI flagged session for review (undetermined human/agent)")
+                reason_codes.append("RESEMBLE_AI_REVIEW_VERDICT")
+
         if resemble_token:
-            evidence.append("Cryptographic agent token present")
+            evidence.append("Cryptographic Resemble.AI verdict token present")
             reason_codes.append("VALID_RESEMBLE_TOKEN")
-            if not detected_family:
+            if not detected_family and not resemble_human_verified and resemble_verdict_label != "review":
                 detected_family = "Verified Autonomous Agent"
                 detected_agent = "Autonomous Agent"
 
@@ -191,11 +237,19 @@ class RADS1Detector:
         agent_detected = False
         confidence = None
 
-        if gemini_authenticated:
+        if resemble_verdict_label == "agent":
+            agent_detected = True
+            detected_family = detected_family or "Resemble.AI Autonomous Agent"
+            detected_agent = detected_agent or "Autonomous AI Agent"
+            confidence = 0.98
+        elif gemini_authenticated:
             agent_detected = True
             detected_family = detected_family or "Google Gemini Agent"
             detected_agent = "Autonomous AI Agent"
             confidence = 0.99
+        elif resemble_human_verified:
+            agent_detected = False
+            confidence = 0.97
         elif detected_family and len(evidence) >= 1:
             agent_detected = True
             confidence = 0.96
@@ -213,6 +267,9 @@ class RADS1Detector:
             "agent_detected": agent_detected,
             "agent_type": detected_agent,
             "agent_family": detected_family,
+            "resemble_verdict": resemble_verdict_label,
+            "resemble_human_verified": resemble_human_verified,
+            "resemble_details": resemble_verdict_raw if isinstance(resemble_verdict_raw, dict) else None,
             "confidence": round(confidence, 4) if confidence else None,
             "evidence": evidence,
             "reason_codes": reason_codes,

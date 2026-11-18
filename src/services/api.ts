@@ -23,7 +23,19 @@ export function getApiBaseUrl(): string {
     // 2. Check saved localStorage (configured via 1-click ?api= link, past session, or settings)
     const saved = localStorage.getItem('bp_api_url');
     if (saved && saved.trim() !== '') {
-      return saved.replace(/\/+$/, '');
+      const cleanSaved = saved.trim().replace(/\/+$/, '');
+      const isHttpsProd =
+        window.location.protocol === 'https:' &&
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1';
+      // On HTTPS production (Vercel), discard insecure http:// or stale temporary tunnel overrides
+      if (isHttpsProd && (cleanSaved.startsWith('http://') || cleanSaved.includes('trycloudflare.com'))) {
+        try {
+          localStorage.removeItem('bp_api_url');
+        } catch {}
+      } else {
+        return cleanSaved;
+      }
     }
 
     // 3. If running on Vercel or any production host, use same-origin /api/v1 (proxied by vercel.json)
@@ -212,7 +224,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   }
 
   const controller = new AbortController();
-  const timeoutMs = options.method === 'POST' ? 9000 : 6000;
+  const timeoutMs = options.method === 'POST' ? 15000 : 10000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {

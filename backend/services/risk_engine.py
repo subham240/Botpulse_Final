@@ -21,14 +21,19 @@ class RiskEngine:
         confidence = None
 
         # ----------------------------------------------------------------------
-        # 1. Evaluate Layer 3: RAD-S1 AI Agent
+        # 1. Resemble.AI & Layer 3 (RAD-S1): AI Agent Detection
         # ----------------------------------------------------------------------
+        resemble_verdict = l3.get("resemble_verdict")
+        resemble_human_verified = bool(l3.get("resemble_human_verified"))
+
         if l3.get("agent_detected"):
             visitor_category = "ai_agent"
             confidence = l3.get("confidence") or 0.96
             # Authenticated AI agents (e.g. Gemini with API key) are recognized as legitimate AI agents
             if "VALID_GEMINI_API_KEY" in l3.get("reason_codes", []):
                 raw_risk = 18.0
+            elif "RESEMBLE_AI_AGENT_VERDICT" in l3.get("reason_codes", []):
+                raw_risk = 42.0
             elif "DECLARED_AI_SIGNATURE" in l3.get("reason_codes", []):
                 raw_risk = 26.0
             else:
@@ -37,7 +42,7 @@ class RiskEngine:
             reasons.append(f"AI_AGENT_DETECTED: {l3.get('agent_family') or 'Autonomous Web Agent'}")
 
         # ----------------------------------------------------------------------
-        # 2. Evaluate Layer 2: LSTM Advanced Bot
+        # 2. Existing ML Layer 2 (Bi-LSTM): Advanced Bot Detection
         # ----------------------------------------------------------------------
         elif l2.get("status") == "completed" and l2.get("advanced_bot_score") is not None and l2.get("advanced_bot_score") >= 0.65:
             visitor_category = "advanced_bot"
@@ -48,9 +53,15 @@ class RiskEngine:
             reasons.append("ADVANCED_BOT_SEQUENTIAL_ANOMALY")
 
         # ----------------------------------------------------------------------
-        # 3. Evaluate Layer 1: XGBoost Classification
+        # 3. Existing ML Layer 1 (XGBoost) for Bot Detection + Resemble.AI for Human Detection
         # ----------------------------------------------------------------------
         elif l1.get("status") == "completed":
+            l1_reasons = l1.get("reason_codes", [])
+            has_strong_headless_bot_sig = (
+                "HEADLESS_AUTOMATION_SIGNATURE" in l1_reasons
+                or float(l1.get("prob_bot") or 0.0) >= 0.85
+            )
+
             if l1.get("predicted_class") == "automated_bot":
                 # If Layer 2 LSTM completed and verified natural human trajectory kinematics, override tabular false positive
                 l2_bot_score = l2.get("advanced_bot_score")
@@ -59,19 +70,45 @@ class RiskEngine:
                     confidence = l2.get("confidence") or 0.95
                     raw_risk = 8.0
                     reasons.append("LSTM_VERIFIED_HUMAN_KINEMATICS")
+                    if resemble_human_verified:
+                        reasons.append("RESEMBLE_AI_HUMAN_VERDICT")
+                elif resemble_human_verified and not has_strong_headless_bot_sig:
+                    # Resemble.AI explicitly verified human interaction and ML found no strong headless/script bot signal
+                    visitor_category = "human"
+                    confidence = l3.get("confidence") or 0.97
+                    raw_risk = 6.0
+                    reasons.extend(l3.get("reason_codes", []))
                 else:
                     visitor_category = "traditional_bot"
                     prob_bot = l1.get("prob_bot", 0.8)
                     raw_risk = 60.0 + (prob_bot * 25.0)  # 60 - 85
                     confidence = l1.get("confidence") or 0.88
-                    reasons.extend(l1.get("reason_codes", []))
+                    reasons.extend(l1_reasons)
                     reasons.append("TRADITIONAL_AUTOMATION_SIGNATURE")
             else:
-                visitor_category = "human"
-                prob_human = l1.get("prob_human", 0.9)
-                raw_risk = max(2.0, (1.0 - prob_human) * 20.0)  # 2 - 15
-                confidence = prob_human
-                reasons.append("VERIFIED_NATURAL_HUMAN_KINEMATICS")
+                if resemble_verdict == "review":
+                    # Resemble.AI marked session undetermined -> step-up PoW verification
+                    visitor_category = "unknown"
+                    confidence = 0.70
+                    raw_risk = 38.0
+                    reasons.extend(l3.get("reason_codes", []))
+                elif resemble_human_verified:
+                    visitor_category = "human"
+                    confidence = l3.get("confidence") or 0.97
+                    raw_risk = 5.0
+                    reasons.extend(l3.get("reason_codes", []))
+                else:
+                    visitor_category = "human"
+                    prob_human = l1.get("prob_human", 0.9)
+                    raw_risk = max(2.0, (1.0 - prob_human) * 20.0)  # 2 - 15
+                    confidence = prob_human
+                    reasons.append("VERIFIED_NATURAL_HUMAN_KINEMATICS")
+
+        elif resemble_human_verified:
+            visitor_category = "human"
+            confidence = l3.get("confidence") or 0.97
+            raw_risk = 6.0
+            reasons.extend(l3.get("reason_codes", []))
 
         else:
             visitor_category = "unknown"

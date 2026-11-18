@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     SUPABASE_DB_URL: Optional[str] = os.getenv("SUPABASE_DB_URL", os.getenv("DATABASE_URL"))
     SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
     SUPABASE_KEY: Optional[str] = os.getenv("SUPABASE_KEY")
+
+    # Resemble.AI RAD-S1 Agent Detection (Server-Side API Verification)
+    RESEMBLE_API_TOKEN: Optional[str] = os.getenv("RESEMBLE_API_TOKEN")
+    RESEMBLE_SITE_ID: str = os.getenv("RESEMBLE_SITE_ID", "76")
+    RESEMBLE_BASE_URL: str = os.getenv("RESEMBLE_BASE_URL", "https://app.resemble.ai/api/v2/agent_detection")
     
     # Model storage path
     MODELS_DIR: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")

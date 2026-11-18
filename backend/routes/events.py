@@ -60,6 +60,8 @@ def ingest_telemetry_events(batch: TelemetryBatch, request: Request):
         meta["api_key"] = api_key
     if batch.agent_family:
         meta["agent_family"] = batch.agent_family
+    if batch.resemble_verdict:
+        meta["resemble_verdict"] = batch.resemble_verdict
     batch_dict["session_metadata"] = meta
 
     # Process batch through tracking pipeline

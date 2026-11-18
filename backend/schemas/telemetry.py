@@ -14,6 +14,7 @@ class TelemetryBatch(BaseModel):
     visitor_id: Optional[str] = None
     user_agent: Optional[str] = None
     resemble_token: Optional[str] = None
+    resemble_verdict: Optional[Dict[str, Any]] = None
     api_key: Optional[str] = None
     gemini_api_key: Optional[str] = None
     agent_family: Optional[str] = None

@@ -77,6 +77,7 @@ class DetectionOrchestrator:
         headers_lower = {str(k).lower(): str(v) for k, v in session_metadata.get("headers", {}).items()}
         has_agent_key = (
             bool(resemble_token)
+            or bool(session_metadata.get("resemble_verdict"))
             or bool(session_metadata.get("gemini_api_key"))
             or bool(session_metadata.get("api_key"))
             or "x-goog-api-key" in headers_lower
