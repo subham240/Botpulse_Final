@@ -275,47 +275,74 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* =========================================================================
-          2. "TRUSTED BY THE LEADERS" LOGO STRIP (MATCHING SCREENSHOT 1 & 2)
+          2. CORE DETECTION BENCHMARKS & ENGINE PROOF STRIP
          ========================================================================= */}
       <section className="py-12 border-y border-white/[0.06] bg-[#101512]/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-[#A3ADA6] font-medium mb-8">
-            Trusted by the leaders
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <p className="text-xs uppercase tracking-[0.2em] text-[#A3ADA6] font-medium text-center mb-8">
+            Engineered for sub-millisecond defense
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-14 text-[#A3ADA6]/70 text-lg md:text-xl font-semibold">
-            {/* BeReal. */}
-            <span className="hover:text-[#F5F7F5] transition-colors font-sans tracking-tight">BeReal.</span>
-            <span className="hidden md:inline text-white/10">|</span>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-8 lg:gap-y-0 lg:divide-x lg:divide-white/[0.08]">
+            <div className="flex flex-col items-center text-center px-4 sm:px-6">
+              <div className="inline-flex items-center gap-2 text-[#43D6A0] mb-1.5">
+                <Zap className="w-4 h-4" />
+                <span className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-[#F5F7F5]">
+                  &lt; 1.8ms
+                </span>
+              </div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#F5F7F5]/90">
+                Edge ML Latency
+              </span>
+              <span className="text-xs text-[#737F77] mt-1">
+                Real-time request screening
+              </span>
+            </div>
 
-            {/* SOUNDCLOUD */}
-            <span className="hover:text-[#F5F7F5] transition-colors font-sans uppercase tracking-widest text-sm font-bold">
-              SOUNDCLOUD
-            </span>
-            <span className="hidden md:inline text-white/10">|</span>
+            <div className="flex flex-col items-center text-center px-4 sm:px-6">
+              <div className="inline-flex items-center gap-2 text-[#43D6A0] mb-1.5">
+                <Cpu className="w-4 h-4" />
+                <span className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-[#F5F7F5]">
+                  3-Layer
+                </span>
+              </div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#F5F7F5]/90">
+                Hybrid AI Pipeline
+              </span>
+              <span className="text-xs text-[#737F77] mt-1">
+                XGBoost · Bi-LSTM · RAD-S1
+              </span>
+            </div>
 
-            {/* flickr */}
-            <span className="hover:text-[#F5F7F5] transition-colors font-serif lowercase text-xl font-normal">
-              flickr
-            </span>
-            <span className="hidden md:inline text-white/10">|</span>
+            <div className="flex flex-col items-center text-center px-4 sm:px-6">
+              <div className="inline-flex items-center gap-2 text-[#43D6A0] mb-1.5">
+                <Activity className="w-4 h-4" />
+                <span className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-[#F5F7F5]">
+                  27 Signals
+                </span>
+              </div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#F5F7F5]/90">
+                Behavioral Telemetry
+              </span>
+              <span className="text-xs text-[#737F77] mt-1">
+                Micro-tremor &amp; pointer entropy
+              </span>
+            </div>
 
-            {/* Medium */}
-            <span className="hover:text-[#F5F7F5] transition-colors font-serif font-bold tracking-tight">
-              Medium
-            </span>
-            <span className="hidden md:inline text-white/10">|</span>
-
-            {/* TAGGED */}
-            <span className="hover:text-[#F5F7F5] transition-colors font-sans uppercase tracking-wider text-sm font-bold">
-              TAGGED
-            </span>
-            <span className="hidden md:inline text-white/10">|</span>
-
-            {/* Pinterest */}
-            <span className="hover:text-[#F5F7F5] transition-colors font-serif italic font-normal text-xl">
-              Pinterest
-            </span>
+            <div className="flex flex-col items-center text-center px-4 sm:px-6">
+              <div className="inline-flex items-center gap-2 text-[#43D6A0] mb-1.5">
+                <Shield className="w-4 h-4" />
+                <span className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-[#F5F7F5]">
+                  Zero
+                </span>
+              </div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#F5F7F5]/90">
+                CAPTCHA Friction
+              </span>
+              <span className="text-xs text-[#737F77] mt-1">
+                Invisible human verification
+              </span>
+            </div>
           </div>
         </div>
       </section>
