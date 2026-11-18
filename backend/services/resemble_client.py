@@ -76,20 +76,23 @@ class ResembleClient:
         if cached and now - cached["ts"] < 30.0:
             return cached["data"]
 
-        # 1. Query by ?sid= parameter (primary Resemble v2 endpoint)
+        # 1. Query sessions and match EXACT sid (Resemble's ?sid= filter may return full list)
         data = self._get_json("sessions", params={"sid": resemble_sid}, timeout=6.0)
         if data:
             items = data.get("items") or []
-            if items:
-                item = items[0]
-                self._cache[resemble_sid] = {"ts": now, "data": item}
-                return item
+            for item in items:
+                if isinstance(item, dict) and str(item.get("sid") or "") == str(resemble_sid):
+                    self._cache[resemble_sid] = {"ts": now, "data": item}
+                    return item
 
-        # 2. Direct path lookup fallback
+        # 2. Direct path lookup fallback (also require exact sid/id match)
         direct = self._get_json(f"sessions/{urllib.parse.quote(resemble_sid)}", timeout=6.0)
         if direct:
             item = direct.get("item", direct)
-            if isinstance(item, dict) and item:
+            if isinstance(item, dict) and (
+                str(item.get("sid") or "") == str(resemble_sid)
+                or str(item.get("id") or "") == str(resemble_sid)
+            ):
                 self._cache[resemble_sid] = {"ts": now, "data": item}
                 return item
 
