@@ -124,7 +124,8 @@ class TrackingService:
             "predicted_label": "AI Agent" if risk_result["visitor_category"] == "ai_agent" else risk_result["visitor_category"].replace('_', ' ').title(),
             "confidence": prevention_result["confidence"],
             "decision_token": prevention_result["decision_token"],
-            "reasons": risk_result["reason_codes"]
+            "reasons": risk_result["reason_codes"],
+            "pow_challenge": prevention_result.get("pow_challenge")
         }
 
 tracking_service = TrackingService()

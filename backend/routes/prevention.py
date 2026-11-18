@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Body
-from typing import Dict, Any
+from fastapi import APIRouter, Body, HTTPException
+from typing import Dict, Any, Optional
 from backend.schemas.prevention import EnforcementFeedbackPayload, PreventionPolicy
 from backend.services.prevention_service import prevention_service
-from backend.core.crypto import generate_pow_challenge
+from backend.core.crypto import generate_pow_challenge, validate_pow_difficulty
 from backend.database import db
 
 router = APIRouter(tags=["Prevention & Enforcement"])
@@ -29,6 +29,11 @@ def get_prevention_policies(site_id: str = "site_alvera_001"):
 @router.post("/prevention/policies")
 def update_prevention_policies(payload: Dict[str, Any] = Body(...)):
     site_id = payload.get("site_id", "site_alvera_001")
+    if "pow_difficulty" in payload and payload["pow_difficulty"] is not None:
+        try:
+            payload["pow_difficulty"] = validate_pow_difficulty(payload["pow_difficulty"], strict=True)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     updated = db.save_policy(site_id, payload)
     return {
         "status": "success",
@@ -37,14 +42,19 @@ def update_prevention_policies(payload: Dict[str, Any] = Body(...)):
     }
 
 @router.post("/prevention/pow/challenge")
-def request_pow_challenge(difficulty: int = 3, site_id: str = "site_alvera_001"):
+def request_pow_challenge(difficulty: Optional[int] = None, site_id: str = "site_alvera_001"):
     """
     Issues an HMAC-signed Cryptographic Proof-of-Work challenge to client browser.
+    Uses saved site policy difficulty unless a valid difficulty (2-5) is explicitly specified.
     """
-    if difficulty <= 0:
-        pol = db.get_policy(site_id)
-        difficulty = pol.get("pow_difficulty", 3) if pol else 3
-    return generate_pow_challenge(difficulty=difficulty)
+    if difficulty is None or difficulty <= 0:
+        validated_difficulty = prevention_service.get_site_pow_difficulty(site_id)
+    else:
+        try:
+            validated_difficulty = validate_pow_difficulty(difficulty, strict=True)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    return generate_pow_challenge(difficulty=validated_difficulty)
 
 @router.post("/prevention/pow/verify")
 def verify_pow_challenge(payload: Dict[str, Any] = Body(...)):
@@ -55,8 +65,8 @@ def verify_pow_challenge(payload: Dict[str, Any] = Body(...)):
     return prevention_service.verify_pow_submission(payload)
 
 @router.get("/prevention/pow/stats")
-def get_pow_statistics():
+def get_pow_statistics(site_id: str = "site_alvera_001"):
     """
     Returns aggregated metrics on Proof-of-Work challenges solved by verified devices.
     """
-    return db.get_pow_stats()
+    return db.get_pow_stats(site_id=site_id)

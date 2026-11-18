@@ -748,6 +748,20 @@ class DatabaseManager:
                 coords_json
             ))
 
+    def get_session_by_id(self, session_id: str) -> Optional[Dict[str, Any]]:
+        if not session_id:
+            return None
+        if self.is_mongodb:
+            return self.mongo_db.sessions.find_one({"session_id": session_id}, {"_id": 0})
+        row = self._query_one("SELECT * FROM sessions WHERE session_id = ?", (session_id,))
+        if not row:
+            return None
+        d = dict(row)
+        d["reasons"] = json.loads(d["reasons"]) if d.get("reasons") and isinstance(d["reasons"], str) else (d.get("reasons") or [])
+        d["metrics"] = json.loads(d["metrics"]) if d.get("metrics") and isinstance(d["metrics"], str) else (d.get("metrics") or {})
+        d["coordinates"] = json.loads(d["coordinates"]) if d.get("coordinates") and isinstance(d["coordinates"], str) else (d.get("coordinates") or [])
+        return d
+
     def get_sessions_list(self, site_key: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         if self.is_mongodb:
             query = {"site_key": site_key} if site_key and site_key != "all" else {}
@@ -1240,18 +1254,46 @@ class DatabaseManager:
 
     def record_pow_event(self, session_id: str, challenge_id: str, difficulty: int, nonce: int, time_taken_ms: float, status: str = "verified"):
         """Records a completed client-side Proof-of-Work hardware integrity challenge."""
+        record_id = f"pow_rec_{uuid.uuid4().hex[:10]}"
+        resolved_at = datetime.utcnow().isoformat()
         if not self.is_mongodb:
-            record_id = f"pow_rec_{uuid.uuid4().hex[:10]}"
             sql = """
             INSERT INTO pow_challenges (id, session_id, challenge_id, difficulty, nonce, time_taken_ms, status, resolved_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
-            self._execute(sql, (record_id, session_id, challenge_id, difficulty, nonce, time_taken_ms, status, datetime.utcnow().isoformat()))
+            self._execute(sql, (record_id, session_id, challenge_id, difficulty, nonce, time_taken_ms, status, resolved_at))
             return record_id
-        return None
+        else:
+            self.mongo_db.pow_challenges.insert_one({
+                "id": record_id,
+                "session_id": session_id,
+                "challenge_id": challenge_id,
+                "difficulty": difficulty,
+                "nonce": nonce,
+                "time_taken_ms": time_taken_ms,
+                "status": status,
+                "resolved_at": resolved_at
+            })
+            return record_id
 
-    def get_pow_stats(self) -> Dict[str, Any]:
+    def is_pow_challenge_used(self, challenge_id: str) -> bool:
+        """Checks whether a PoW challenge_id has already been verified/consumed."""
+        if not challenge_id:
+            return False
+        if self.is_mongodb:
+            return self.mongo_db.pow_challenges.find_one({"challenge_id": challenge_id, "status": "verified"}) is not None
+        row = self._query_one("SELECT 1 as used FROM pow_challenges WHERE challenge_id = ? AND status = 'verified' LIMIT 1", (challenge_id,))
+        return row is not None
+
+    def get_pow_stats(self, site_id: str = "site_alvera_001") -> Dict[str, Any]:
         """Retrieves aggregated statistics for cryptographic Proof-of-Work challenges."""
+        policy = self.get_policy(site_id) or {}
+        configured_difficulty = policy.get("pow_difficulty", 3)
+        try:
+            configured_difficulty = max(2, min(5, int(configured_difficulty)))
+        except (TypeError, ValueError):
+            configured_difficulty = 3
+
         if not self.is_mongodb:
             row = self._query_one("SELECT COUNT(*) as count, AVG(time_taken_ms) as avg_time FROM pow_challenges WHERE status = 'verified'")
             count = row["count"] if row and row.get("count") else 0
@@ -1260,9 +1302,9 @@ class DatabaseManager:
                 "total_solved": count,
                 "avg_solve_time_ms": avg_time,
                 "status": "active",
-                "default_difficulty": 3
+                "default_difficulty": configured_difficulty
             }
-        return {"total_solved": 0, "avg_solve_time_ms": 0.0, "status": "active", "default_difficulty": 3}
+        return {"total_solved": 0, "avg_solve_time_ms": 0.0, "status": "active", "default_difficulty": configured_difficulty}
 
     def get_policy(self, site_id: str) -> Optional[Dict[str, Any]]:
         """Retrieves active bot regulation policies for a site."""
