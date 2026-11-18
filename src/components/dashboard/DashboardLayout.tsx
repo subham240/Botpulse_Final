@@ -167,7 +167,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
             {showDateDropdown && (
               <div className="absolute left-0 mt-1 w-44 bg-[#121A16] border border-white/10 rounded-xl shadow-2xl py-1 z-50 text-xs font-mono animate-in fade-in">
-                {['Last 24 Hours', 'Last 7 Days', 'Last 30 Days'].map((range) => (
+                {['Last 24 Hours', 'Last 7 Days', 'Last 30 Days', 'All Time'].map((range) => (
                   <button
                     key={range}
                     onClick={() => {

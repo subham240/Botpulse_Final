@@ -748,6 +748,8 @@ class DatabaseManager:
                 metrics_json,
                 coords_json
             ))
+        if hasattr(self, "_dashboard_cache"):
+            self._dashboard_cache.clear()
 
     def get_session_by_id(self, session_id: str) -> Optional[Dict[str, Any]]:
         if not session_id:
@@ -808,6 +810,8 @@ class DatabaseManager:
                     ev.get("sequence_num", 1),
                     payload_json
                 ))
+        if hasattr(self, "_dashboard_cache"):
+            self._dashboard_cache.clear()
 
     def get_recent_events(self, site_key: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         if self.is_mongodb:
@@ -1010,19 +1014,20 @@ class DatabaseManager:
                 if site_info and "site_key" in site_info:
                     target_key = site_info["site_key"]
             
-            # Compute timestamp cutoff if time_range is specified
+            # Compute timestamp cutoff anchored to current UTC wall-clock time
+            # (never anchor to MAX(timestamp), which freezes the window while idle and drops older sessions when a new visit arrives)
+            now_ms = int(_time.time() * 1000)
             cutoff_ms = 0
             cutoff_iso = None
             if time_range and time_range != "all":
-                row = self._query_one("SELECT MAX(timestamp) as max_ts FROM events")
-                max_ts = row["max_ts"] if row and row["max_ts"] else int(datetime.utcnow().timestamp() * 1000)
                 if time_range == "24h":
-                    cutoff_ms = max_ts - 24 * 3600 * 1000
+                    cutoff_ms = now_ms - 24 * 3600 * 1000
                 elif time_range == "7d":
-                    cutoff_ms = max_ts - 7 * 86400 * 1000
+                    cutoff_ms = now_ms - 7 * 86400 * 1000
                 elif time_range == "30d":
-                    cutoff_ms = max_ts - 30 * 86400 * 1000
-                cutoff_iso = datetime.utcfromtimestamp(cutoff_ms / 1000.0).isoformat()
+                    cutoff_ms = now_ms - 30 * 86400 * 1000
+                if cutoff_ms > 0:
+                    cutoff_iso = datetime.utcfromtimestamp(cutoff_ms / 1000.0).isoformat()
 
             sess_conditions = []
             sess_params = []
@@ -1038,7 +1043,6 @@ class DatabaseManager:
             sess_row = self._query_one(f"SELECT COUNT(*) as count FROM sessions {sess_where}", tuple(sess_params))
             total_sessions = sess_row["count"] if sess_row else 0
 
-            now_ms = int(_time.time() * 1000)
             ev_conditions = ["e.timestamp <= ?"]
             ev_params = [now_ms + 60000]
             if target_key and target_key != "all":

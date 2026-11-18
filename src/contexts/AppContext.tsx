@@ -262,7 +262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshBackendData = useCallback(async () => {
     try {
       setIsLoadingBackend(true);
-      const rangeParam = dateRange.includes('7') ? '7d' : dateRange.includes('30') ? '30d' : '24h';
+      const rangeParam = dateRange.includes('All') ? 'all' : dateRange.includes('7') ? '7d' : dateRange.includes('30') ? '30d' : '24h';
       const [
         statsRes,
         liveRes,
@@ -359,7 +359,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isStreaming) return;
 
     let isPolling = false;
-    const rangeParam = dateRange.includes('7') ? '7d' : dateRange.includes('30') ? '30d' : '24h';
+    const rangeParam = dateRange.includes('All') ? 'all' : dateRange.includes('7') ? '7d' : dateRange.includes('30') ? '30d' : '24h';
     const interval = setInterval(async () => {
       if (isPolling) return;
       isPolling = true;

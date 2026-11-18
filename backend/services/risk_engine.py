@@ -61,6 +61,17 @@ class RiskEngine:
                 "HEADLESS_AUTOMATION_SIGNATURE" in l1_reasons
                 or float(l1.get("prob_bot") or 0.0) >= 0.85
             )
+            extracted = orchestrated_data.get("extracted_features") or {}
+            num_requests = float(extracted.get("NUMBER_OF_REQUESTS") or 0.0)
+            has_explicit_automation_signal = any(
+                code in l1_reasons
+                for code in (
+                    "HEADLESS_AUTOMATION_SIGNATURE",
+                    "HIGH_FREQUENCY_BURST",
+                    "UNNATURAL_FIXED_CADENCE",
+                    "ZERO_CURVATURE_TRAJECTORY",
+                )
+            )
 
             if l1.get("predicted_class") == "automated_bot":
                 # If Layer 2 LSTM completed and verified natural human trajectory kinematics, override tabular false positive
@@ -78,6 +89,12 @@ class RiskEngine:
                     confidence = l3.get("confidence") or 0.97
                     raw_risk = 6.0
                     reasons.extend(l3.get("reason_codes", []))
+                elif num_requests <= 3 and not has_explicit_automation_signal and l2.get("status") != "completed":
+                    # Avoid prematurely flagging cold-start normal browser page_view sessions (before mouse kinematics arrive) as bots
+                    visitor_category = "human"
+                    confidence = 0.78
+                    raw_risk = 12.0
+                    reasons.append("PROVISIONAL_BROWSER_SESSION")
                 else:
                     visitor_category = "traditional_bot"
                     prob_bot = l1.get("prob_bot", 0.8)
