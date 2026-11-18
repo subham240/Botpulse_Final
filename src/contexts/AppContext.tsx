@@ -122,10 +122,22 @@ const mapBackendEventToTelemetry = (bEvt: any): TelemetryEvent => {
   };
 };
 
+const formatUtcIsoToLocalTime = (iso?: string): string => {
+  if (!iso) return new Date().toTimeString().split(' ')[0];
+  try {
+    const normalized = iso.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(iso) ? iso : `${iso}Z`;
+    const d = new Date(normalized);
+    if (!isNaN(d.getTime())) {
+      return d.toTimeString().split(' ')[0];
+    }
+  } catch {}
+  return iso.slice(11, 19);
+};
+
 // Helper: Map Backend Session -> SessionRecord
 const mapBackendSessionToRecord = (bSess: any): SessionRecord => {
-  const firstSeenStr = bSess.first_seen ? bSess.first_seen.slice(11, 19) : new Date().toTimeString().split(' ')[0];
-  const lastSeenStr = bSess.last_seen ? bSess.last_seen.slice(11, 19) : new Date().toTimeString().split(' ')[0];
+  const firstSeenStr = formatUtcIsoToLocalTime(bSess.first_seen);
+  const lastSeenStr = formatUtcIsoToLocalTime(bSess.last_seen);
   const category = (bSess.category as VisitorCategory) || 'human';
   const riskScore = Math.round(bSess.risk_score ?? 0);
   const riskLevel = (bSess.risk_level as RiskLevel) || (riskScore > 80 ? 'critical' : riskScore > 60 ? 'high' : riskScore > 30 ? 'moderate' : 'low');

@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from typing import Dict, Any, List
 from datetime import datetime
@@ -103,17 +104,25 @@ class TrackingService:
         }
         db.save_session(session_doc)
 
-        # Normalize and store event records
+        # Normalize and store event records (clamp any future/invalid client clocks to server UTC time)
+        now_ms = int(time.time() * 1000)
         db_events = []
-        for ev in raw_events:
+        for idx, ev in enumerate(raw_events):
+            raw_ts = ev.get("timestamp")
+            try:
+                ev_ts = int(raw_ts)
+            except (TypeError, ValueError):
+                ev_ts = now_ms
+            if ev_ts <= 0 or ev_ts > now_ms + 60000:
+                ev_ts = now_ms
             db_events.append({
                 "id": f"evt_{uuid.uuid4().hex[:12]}",
                 "session_id": session_id,
                 "site_key": site_key,
                 "event_type": ev.get("event_type", "telemetry"),
                 "url": ev.get("url", ""),
-                "timestamp": ev.get("timestamp", int(datetime.utcnow().timestamp() * 1000)),
-                "sequence_num": ev.get("sequence_num", 1),
+                "timestamp": ev_ts,
+                "sequence_num": ev.get("sequence_num", idx + 1),
                 "payload": ev.get("payload", {})
             })
         db.insert_events_batch(db_events)

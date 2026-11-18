@@ -10,6 +10,7 @@ import os
 import json
 import sqlite3
 import logging
+import time as _time
 import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -830,10 +831,13 @@ class DatabaseManager:
             FROM events e
             LEFT JOIN sessions s ON e.session_id = s.session_id
             """
-            params = []
+            now_cutoff_ms = int(_time.time() * 1000) + 60000
+            conditions = ["e.timestamp <= ?"]
+            params: List[Any] = [now_cutoff_ms]
             if site_key and site_key != "all":
-                query += " WHERE e.site_key = ?"
+                conditions.append("e.site_key = ?")
                 params.append(site_key)
+            query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY e.timestamp DESC LIMIT ?"
             params.append(limit)
             
@@ -1034,8 +1038,9 @@ class DatabaseManager:
             sess_row = self._query_one(f"SELECT COUNT(*) as count FROM sessions {sess_where}", tuple(sess_params))
             total_sessions = sess_row["count"] if sess_row else 0
 
-            ev_conditions = []
-            ev_params = []
+            now_ms = int(_time.time() * 1000)
+            ev_conditions = ["e.timestamp <= ?"]
+            ev_params = [now_ms + 60000]
             if target_key and target_key != "all":
                 ev_conditions.append("e.site_key = ?")
                 ev_params.append(target_key)
@@ -1132,7 +1137,8 @@ class DatabaseManager:
                 }
 
             if trend_buckets:
-                max_b = max(trend_buckets.keys())
+                now_bucket = (now_ms // interval_ms) * interval_ms
+                max_b = min(max(trend_buckets.keys()), now_bucket) if max(trend_buckets.keys()) > now_bucket else now_bucket
                 max_points = 24 if is_hourly else (7 if time_range == "7d" else 30)
                 min_b = max_b - (max_points - 1) * interval_ms
 
