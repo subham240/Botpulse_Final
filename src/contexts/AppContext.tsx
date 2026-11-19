@@ -60,6 +60,7 @@ interface AppContextType {
   backendAgents: AIAgentRecord[];
   refreshBackendData: () => Promise<void>;
   isLoadingBackend: boolean;
+  updateThreatStatusInContext: (threatId: string, status: ThreatStatus) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -354,7 +355,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     refreshBackendData();
   }, [refreshBackendData]);
 
-  // Periodic polling when streaming is active: pulls real telemetry without queuing
+  const updateThreatStatusInContext = useCallback((threatId: string, status: ThreatStatus) => {
+    setBackendThreats((prev) =>
+      prev.map((t) => (t.id === threatId ? { ...t, status } : t))
+    );
+  }, []);
+
+  // Periodic polling when streaming is active: pulls real telemetry, threats & prevention stats
   useEffect(() => {
     if (!isStreaming) return;
 
@@ -364,10 +371,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (isPolling) return;
       isPolling = true;
       try {
-        const [stRes, evRes, sessRes] = await Promise.allSettled([
+        const [stRes, evRes, sessRes, thrRes, prevRes] = await Promise.allSettled([
           api.dashboard.getStats(selectedDomain, rangeParam),
           api.dashboard.getLiveEvents(50),
           api.dashboard.getSessions(50),
+          api.dashboard.getThreats(),
+          api.dashboard.getPreventionStats(),
         ]);
         if (stRes.status === 'fulfilled' && stRes.value) {
           setBackendStats(stRes.value);
@@ -377,6 +386,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         if (sessRes.status === 'fulfilled' && Array.isArray(sessRes.value) && sessRes.value.length > 0) {
           setSessions(sessRes.value.map(mapBackendSessionToRecord));
+        }
+        if (thrRes.status === 'fulfilled' && Array.isArray(thrRes.value) && thrRes.value.length > 0) {
+          setBackendThreats(thrRes.value.map(mapBackendThreatToRecord));
+        }
+        if (prevRes.status === 'fulfilled' && prevRes.value) {
+          setPreventionStats(prevRes.value);
         }
       } catch (err) {
         // silent fallback
@@ -550,6 +565,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         backendAgents,
         refreshBackendData,
         isLoadingBackend,
+        updateThreatStatusInContext,
       }}
     >
       {children}

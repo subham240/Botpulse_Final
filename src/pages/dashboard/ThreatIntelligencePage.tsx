@@ -4,10 +4,20 @@ import { ThreatRecord, ThreatStatus } from '../../types';
 import { Badge } from '../../components/shared/Badge';
 import { useApp } from '../../contexts/AppContext';
 import { api } from '../../services/api';
-import { ShieldAlert, AlertTriangle, CheckCircle, Search, Filter, ShieldCheck, Activity } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, CheckCircle, Search, Filter, ShieldCheck, Activity, RefreshCw, Radio } from 'lucide-react';
 
 export const ThreatIntelligencePage: React.FC = () => {
-  const { showToast, backendThreats, demoMode } = useApp();
+  const {
+    showToast,
+    backendThreats,
+    demoMode,
+    updateThreatStatusInContext,
+    refreshBackendData,
+    isStreaming,
+    setIsStreaming,
+    isLoadingBackend
+  } = useApp();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const activeThreats = demoMode ? MOCK_THREATS : (backendThreats.length > 0 ? backendThreats : MOCK_THREATS);
   const [threats, setThreats] = useState<ThreatRecord[]>(activeThreats);
   const [selectedThreat, setSelectedThreat] = useState<ThreatRecord | null>(null);
@@ -16,7 +26,25 @@ export const ThreatIntelligencePage: React.FC = () => {
 
   React.useEffect(() => {
     setThreats(activeThreats);
+    if (selectedThreat) {
+      const updated = activeThreats.find((t) => t.id === selectedThreat.id);
+      if (updated) {
+        setSelectedThreat(updated);
+      }
+    }
   }, [activeThreats]);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshBackendData();
+      showToast('Threat Stream Refreshed', 'Synced latest threat telemetry from edge.', 'success');
+    } catch {
+      showToast('Sync Warning', 'Failed to refresh latest threats.', 'warning');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleUpdateStatus = async (threatId: string, newStatus: ThreatStatus) => {
     setThreats((prev) =>
@@ -25,6 +53,7 @@ export const ThreatIntelligencePage: React.FC = () => {
     if (selectedThreat && selectedThreat.id === threatId) {
       setSelectedThreat({ ...selectedThreat, status: newStatus });
     }
+    updateThreatStatusInContext(threatId, newStatus);
 
     try {
       await api.dashboard.updateThreatStatus(threatId, newStatus);
@@ -64,9 +93,29 @@ export const ThreatIntelligencePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-mono text-[#A3ADA6]">
-          <span className="w-2 h-2 rounded-full bg-[#43D6A0] animate-pulse" />
-          <span>Status: <strong className="text-[#43D6A0]">Active Edge Shield</strong></span>
+        <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+          <button
+            onClick={() => setIsStreaming(!isStreaming)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] transition-colors ${
+              isStreaming
+                ? 'bg-[#43D6A0]/10 border-[#43D6A0]/30 text-[#43D6A0]'
+                : 'bg-surface-0 border-white/10 text-slate-400 hover:text-white'
+            }`}
+            title={isStreaming ? 'Pause Realtime Stream' : 'Resume Realtime Stream'}
+          >
+            <span className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-[#43D6A0] animate-pulse' : 'bg-slate-500'}`} />
+            <span>{isStreaming ? 'LIVE REALTIME' : 'STREAM PAUSED'}</span>
+          </button>
+
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing || isLoadingBackend}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-1 hover:bg-surface-2 border border-white/10 text-slate-300 hover:text-white text-[11px] transition-colors disabled:opacity-50"
+            title="Refresh threats now"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing || isLoadingBackend ? 'animate-spin text-[#43D6A0]' : ''}`} />
+            <span>Sync</span>
+          </button>
         </div>
       </div>
 

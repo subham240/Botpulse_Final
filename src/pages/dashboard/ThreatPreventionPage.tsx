@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { api } from '../../services/api';
 import {
@@ -31,7 +31,8 @@ import {
 import { EnforcementDecision, PreventionPolicy } from '../../types';
 
 export const ThreatPreventionPage: React.FC = () => {
-  const { showToast, preventionStats } = useApp();
+  const { showToast, preventionStats, isStreaming, refreshBackendData } = useApp();
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Core Risk Thresholds
   const [blockThreshold, setBlockThreshold] = useState<number>(80);
@@ -94,48 +95,77 @@ export const ThreatPreventionPage: React.FC = () => {
     action: () => void;
   } | null>(null);
 
-  // Load live policies on mount
-  useEffect(() => {
-    // 1. Fetch current policies from backend
-    api.prevention
-      .getPolicies('site_alvera_001')
-      .then((policy) => {
-        if (policy) {
-          if (typeof policy.block_threshold === 'number') setBlockThreshold(policy.block_threshold);
-          if (typeof policy.verify_threshold === 'number') setVerifyThreshold(policy.verify_threshold);
-          if (typeof policy.auto_mitigation === 'boolean') setAutoMitigation(policy.auto_mitigation);
-          if (typeof policy.rate_limit_rpm === 'number') setRateLimitRpm(policy.rate_limit_rpm);
-          if (typeof policy.burst_allowance === 'number') setBurstAllowance(policy.burst_allowance);
-          if (policy.rate_limit_action) setRateLimitAction(policy.rate_limit_action);
-          if (policy.lstm_kinematic_sensitivity) setKinematicSensitivity(policy.lstm_kinematic_sensitivity);
-          if (typeof policy.block_headless_browsers === 'boolean') setBlockHeadlessBrowsers(policy.block_headless_browsers);
-          if (typeof policy.block_known_scrapers === 'boolean') setBlockKnownScrapers(policy.block_known_scrapers);
-          if (typeof policy.block_data_centers === 'boolean') setBlockDataCenters(policy.block_data_centers);
-          if (typeof policy.rapid_scan_protection === 'boolean') setRapidScanProtection(policy.rapid_scan_protection);
-          if (typeof policy.pow_difficulty === 'number') setPowDifficulty(policy.pow_difficulty);
-          if (policy.traditional_bot_action) setTraditionalBotAction(policy.traditional_bot_action);
-          if (policy.ai_agent_action) setAiAgentAction(policy.ai_agent_action);
-          if (policy.high_risk_action) setHighRiskAction(policy.high_risk_action);
-          if (policy.verified_bot_action) setVerifiedBotAction(policy.verified_bot_action);
-          if (Array.isArray(policy.block_list) && policy.block_list.length > 0) {
-            setBlockList(policy.block_list);
-          }
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not load remote policy, using defaults:', err);
-      });
+  // Load live policies and stats from backend
+  const loadPoliciesAndStats = useCallback(async () => {
+    try {
+      const [policyRes, powRes] = await Promise.allSettled([
+        api.prevention.getPolicies('site_alvera_001'),
+        api.prevention.getPoWStats(),
+      ]);
 
-    // 2. Fetch live PoW stats
-    api.prevention
-      .getPoWStats()
-      .then((data) => {
-        if (data && typeof data.total_solved === 'number') {
-          setPowStats(data);
+      if (policyRes.status === 'fulfilled' && policyRes.value) {
+        const policy = policyRes.value;
+        if (typeof policy.block_threshold === 'number') setBlockThreshold(policy.block_threshold);
+        if (typeof policy.verify_threshold === 'number') setVerifyThreshold(policy.verify_threshold);
+        if (typeof policy.auto_mitigation === 'boolean') setAutoMitigation(policy.auto_mitigation);
+        if (typeof policy.rate_limit_rpm === 'number') setRateLimitRpm(policy.rate_limit_rpm);
+        if (typeof policy.burst_allowance === 'number') setBurstAllowance(policy.burst_allowance);
+        if (policy.rate_limit_action) setRateLimitAction(policy.rate_limit_action);
+        if (policy.lstm_kinematic_sensitivity) setKinematicSensitivity(policy.lstm_kinematic_sensitivity);
+        if (typeof policy.block_headless_browsers === 'boolean') setBlockHeadlessBrowsers(policy.block_headless_browsers);
+        if (typeof policy.block_known_scrapers === 'boolean') setBlockKnownScrapers(policy.block_known_scrapers);
+        if (typeof policy.block_data_centers === 'boolean') setBlockDataCenters(policy.block_data_centers);
+        if (typeof policy.rapid_scan_protection === 'boolean') setRapidScanProtection(policy.rapid_scan_protection);
+        if (typeof policy.pow_difficulty === 'number') setPowDifficulty(policy.pow_difficulty);
+        if (policy.traditional_bot_action) setTraditionalBotAction(policy.traditional_bot_action);
+        if (policy.ai_agent_action) setAiAgentAction(policy.ai_agent_action);
+        if (policy.high_risk_action) setHighRiskAction(policy.high_risk_action);
+        if (policy.verified_bot_action) setVerifiedBotAction(policy.verified_bot_action);
+        if (Array.isArray(policy.block_list) && policy.block_list.length > 0) {
+          setBlockList(policy.block_list);
         }
-      })
-      .catch(() => {});
+      }
+
+      if (powRes.status === 'fulfilled' && powRes.value && typeof powRes.value.total_solved === 'number') {
+        setPowStats(powRes.value);
+      }
+    } catch (err) {
+      console.warn('Could not load remote policy, using defaults:', err);
+    }
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadPoliciesAndStats();
+  }, [loadPoliciesAndStats]);
+
+  // Periodic polling for live PoW stats in realtime when streaming
+  useEffect(() => {
+    if (!isStreaming) return;
+    const interval = setInterval(() => {
+      api.prevention
+        .getPoWStats()
+        .then((data) => {
+          if (data && typeof data.total_solved === 'number') {
+            setPowStats(data);
+          }
+        })
+        .catch(() => {});
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [isStreaming]);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      await Promise.all([loadPoliciesAndStats(), refreshBackendData()]);
+      showToast('Synced with Edge', 'Synchronized live policies and telemetry metrics.', 'success');
+    } catch {
+      showToast('Sync Warning', 'Failed to synchronize with edge backend.', 'warning');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Apply one-click preset templates
   const applyPreset = (preset: 'balanced' | 'aggressive' | 'permissive') => {
@@ -378,6 +408,16 @@ export const ThreatPreventionPage: React.FC = () => {
               🌐 AI Friendly
             </button>
           </div>
+
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-mono font-bold bg-surface-0 hover:bg-surface-2 border border-white/10 text-slate-300 hover:text-white transition-all disabled:opacity-50"
+            title="Sync latest policy & metrics from edge"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#43D6A0]' : ''}`} />
+            <span>Sync</span>
+          </button>
 
           <button
             onClick={handleDeployRules}
