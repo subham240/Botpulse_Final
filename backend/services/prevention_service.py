@@ -170,10 +170,22 @@ class PreventionService:
                 custom_action = policy.get("ai_agent_action")
                 if custom_action:
                     decision_action = custom_action.upper()
+                    if decision_action == "BLOCK":
+                        risk_score = max(risk_score, 85.0)
+                        risk_result["risk_score"] = risk_score
+                        risk_result["risk_level"] = "critical"
+                        risk_result["decision"] = "block"
+                        if not any("POLICY_BLOCK" in r for r in reason_codes):
+                            reason_codes.append("POLICY_ENFORCED_AI_AGENT_BLOCK")
             elif visitor_category in ("traditional_bot", "advanced_bot"):
                 custom_action = policy.get("traditional_bot_action")
                 if custom_action:
                     decision_action = custom_action.upper()
+                    if decision_action == "BLOCK":
+                        risk_score = max(risk_score, 85.0)
+                        risk_result["risk_score"] = risk_score
+                        risk_result["risk_level"] = "critical"
+                        risk_result["decision"] = "block"
             elif risk_score >= block_thresh:
                 high_action = policy.get("high_risk_action", "block")
                 decision_action = high_action.upper()
