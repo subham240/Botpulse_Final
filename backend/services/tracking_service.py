@@ -80,7 +80,8 @@ class TrackingService:
         prevention_result = prevention_service.generate_prevention_decision(
             session_id=session_id,
             site_id=site_id,
-            risk_result=risk_result
+            risk_result=risk_result,
+            client_ip=client_ip
         )
 
         # 7. Persist Session & Events to Database

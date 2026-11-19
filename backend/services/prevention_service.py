@@ -80,21 +80,107 @@ class PreventionService:
         for sid in expired_sessions:
             self._pow_verified_sessions.pop(sid, None)
 
+    @staticmethod
+    def is_ip_in_blocklist(client_ip: str, block_list: list) -> bool:
+        """Checks whether a client IP falls within an exact IP or CIDR subnet in the blocklist."""
+        if not client_ip or not block_list:
+            return False
+        import ipaddress
+        try:
+            cip = ipaddress.ip_address(client_ip.strip())
+        except ValueError:
+            return False
+
+        for item in block_list:
+            if not item:
+                continue
+            # Strip comments e.g. "45.154.255.89/32 (Known Headless Cluster)" -> "45.154.255.89/32"
+            cleaned = str(item).split()[0].strip()
+            try:
+                if "/" in cleaned:
+                    net = ipaddress.ip_network(cleaned, strict=False)
+                    if cip in net:
+                        return True
+                else:
+                    if cip == ipaddress.ip_address(cleaned):
+                        return True
+            except ValueError:
+                if client_ip.strip() == cleaned:
+                    return True
+        return False
+
     def generate_prevention_decision(
         self,
         session_id: str,
         site_id: str,
-        risk_result: Dict[str, Any]
+        risk_result: Dict[str, Any],
+        client_ip: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Creates an actionable prevention decision and signs an HMAC-SHA256 token
         verifiable by Elvara's server/enforcement_service.js.
+        Evaluates active site policy: IP blocklists, custom risk thresholds,
+        category overrides, and headless browser blocking.
         When VERIFY is triggered, attaches a Cryptographic Proof-of-Work challenge
         using the site's configured difficulty policy.
         """
+        # Load active site regulation policy from database
+        policy = db.get_policy(site_id)
+        if not policy and site_id != settings.DEFAULT_SITE_ID:
+            policy = db.get_policy(settings.DEFAULT_SITE_ID)
+        policy = policy or {}
+
         decision_action = risk_result.get("decision", "allow").upper()
-        risk_score = risk_result.get("risk_score", 0.0)
+        risk_score = float(risk_result.get("risk_score", 0.0))
         visitor_category = risk_result.get("visitor_category", "unknown")
+        reason_codes = risk_result.setdefault("reason_codes", [])
+
+        # 1. Enforce Edge Subnet & IP Blocklist
+        block_list = policy.get("block_list")
+        if block_list is None:
+            block_list = [
+                "45.154.255.89/32 (Known Headless Cluster)",
+                "91.240.118.0/24 (Credential Stuffing Proxy)",
+            ]
+        if client_ip and self.is_ip_in_blocklist(client_ip, block_list):
+            logger.warning("Session %s IP %s is in blocklist -> Enforcing immediate BLOCK.", session_id, client_ip)
+            decision_action = "BLOCK"
+            risk_score = 100.0
+            risk_result["risk_score"] = 100.0
+            risk_result["risk_level"] = "critical"
+            risk_result["decision"] = "block"
+            if not any("IP_IN_BLOCKLIST" in r for r in reason_codes):
+                reason_codes.append(f"IP_IN_BLOCKLIST: {client_ip}")
+
+        # 2. Enforce Headless Browser Policy
+        elif policy.get("block_headless_browsers", True) and any("HEADLESS" in r for r in reason_codes):
+            logger.info("Session %s exhibits headless browser signature -> Enforcing BLOCK per policy.", session_id)
+            decision_action = "BLOCK"
+            risk_score = max(risk_score, 85.0)
+            risk_result["risk_score"] = risk_score
+            risk_result["risk_level"] = "critical"
+            risk_result["decision"] = "block"
+
+        # 3. Enforce Configurable Risk Thresholds and Category Overrides
+        else:
+            block_thresh = policy.get("block_threshold", 80)
+            verify_thresh = policy.get("verify_threshold", 60)
+
+            if visitor_category == "ai_agent":
+                custom_action = policy.get("ai_agent_action")
+                if custom_action:
+                    decision_action = custom_action.upper()
+            elif visitor_category in ("traditional_bot", "advanced_bot"):
+                custom_action = policy.get("traditional_bot_action")
+                if custom_action:
+                    decision_action = custom_action.upper()
+            elif risk_score >= block_thresh:
+                high_action = policy.get("high_risk_action", "block")
+                decision_action = high_action.upper()
+            elif risk_score >= verify_thresh:
+                decision_action = "VERIFY"
+            elif visitor_category == "human" and risk_score < verify_thresh:
+                decision_action = "ALLOW"
 
         # If a VERIFY session already completed PoW recently, allow continued browsing
         # without falsely relabeling the visitor as human or overriding BLOCK/RATE_LIMIT.

@@ -25,6 +25,10 @@ def get_prevention_policies(site_id: str = "site_alvera_001"):
     if not policy:
         default_policy = PreventionPolicy(site_id=site_id)
         return default_policy.dict()
+    defaults = PreventionPolicy(site_id=site_id).dict()
+    for k, v in defaults.items():
+        if k not in policy or policy[k] is None:
+            policy[k] = v
     return policy
 
 @router.put("/prevention/policies")
