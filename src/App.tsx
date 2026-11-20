@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
 import { Navbar } from './components/shared/Navbar';
@@ -7,6 +7,7 @@ import { Footer } from './components/shared/Footer';
 import { ToastContainer } from './components/shared/ToastContainer';
 import { SessionDetailModal } from './components/shared/SessionDetailModal';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
+import { CinematicStartupIntro } from './components/intro/CinematicStartupIntro';
 
 // Marketing Pages
 import { HomePage } from './pages/marketing/HomePage';
@@ -41,14 +42,72 @@ import { SettingsPage } from './pages/dashboard/SettingsPage';
 
 // Public Layout Wrapper
 const PublicLayout: React.FC = () => {
+  const location = useLocation();
+
+  const [showIntro, setShowIntro] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const isHome = location.pathname === '/';
+    const searchParams = new URLSearchParams(window.location.search);
+    const forceReplay = searchParams.get('intro') === 'true' || searchParams.get('replay') === '1';
+    let alreadySeen = false;
+    try {
+      alreadySeen = sessionStorage.getItem('botpulse_intro_seen') === 'true';
+    } catch {
+      alreadySeen = false;
+    }
+    return isHome && (!alreadySeen || forceReplay);
+  });
+
+  const [isRevealing, setIsRevealing] = useState(false);
+
+  // Expose replay function on window for testing in browser console
+  useEffect(() => {
+    (window as any).replayBotPulseIntro = () => {
+      try {
+        sessionStorage.removeItem('botpulse_intro_seen');
+      } catch {}
+      window.location.href = '/?intro=true';
+    };
+  }, []);
+
+  // Dismiss intro immediately if user navigates to a non-home route
+  useEffect(() => {
+    if (location.pathname !== '/' && showIntro) {
+      setShowIntro(false);
+    }
+  }, [location.pathname, showIntro]);
+
   return (
-    <div className="min-h-screen flex flex-col bg-void text-slate-100">
-      <Navbar />
-      <main className="flex-1">
-        <Outlet />
-      </main>
-      <Footer />
-    </div>
+    <>
+      {showIntro && (
+        <CinematicStartupIntro
+          onRevealing={() => setIsRevealing(true)}
+          onComplete={() => {
+            setIsRevealing(true);
+            setShowIntro(false);
+          }}
+        />
+      )}
+
+      <div
+        className={`min-h-screen flex flex-col bg-void text-slate-100 ${
+          showIntro && !isRevealing
+            ? 'opacity-0 scale-95 pointer-events-none'
+            : showIntro && isRevealing
+            ? 'transition-all duration-1000 ease-out opacity-100 scale-100 pointer-events-auto'
+            : 'opacity-100 scale-100'
+        }`}
+        style={{
+          transformOrigin: '50% 25%',
+        }}
+      >
+        <Navbar />
+        <main className="flex-1">
+          <Outlet />
+        </main>
+        <Footer />
+      </div>
+    </>
   );
 };
 
