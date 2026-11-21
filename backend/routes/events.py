@@ -24,6 +24,8 @@ def ingest_telemetry_events(batch: TelemetryBatch, request: Request):
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         client_ip = forwarded.split(",")[0].strip()
+    elif batch.dict().get("ip"):
+        client_ip = str(batch.dict()["ip"]).strip()
 
     batch_dict = batch.dict()
 

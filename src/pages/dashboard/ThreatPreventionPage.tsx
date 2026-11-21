@@ -68,7 +68,7 @@ export const ThreatPreventionPage: React.FC = () => {
   const loadPoliciesAndStats = useCallback(async () => {
     try {
       const [policyRes, powRes] = await Promise.allSettled([
-        api.prevention.getPolicies('site_alvera_001'),
+        api.prevention.getPolicies('site_elvara_001'),
         api.prevention.getPoWStats(),
       ]);
 
@@ -96,7 +96,8 @@ export const ThreatPreventionPage: React.FC = () => {
   // Initial load
   useEffect(() => {
     loadPoliciesAndStats();
-  }, [loadPoliciesAndStats]);
+    refreshBackendData();
+  }, [loadPoliciesAndStats, refreshBackendData]);
 
   // Periodic polling for live PoW stats in realtime when streaming
   useEffect(() => {
@@ -110,7 +111,7 @@ export const ThreatPreventionPage: React.FC = () => {
           }
         })
         .catch(() => {});
-    }, 6000);
+    }, 4000);
     return () => clearInterval(interval);
   }, [isStreaming]);
 
@@ -173,7 +174,7 @@ export const ThreatPreventionPage: React.FC = () => {
         time_taken_ms: durationMs,
       });
 
-      if (verifyRes.verified) {
+      if (verifyRes.verified || verifyRes.success) {
         setPowTestResult({
           solved: true,
           nonce,
@@ -188,6 +189,7 @@ export const ThreatPreventionPage: React.FC = () => {
         );
         const updated = await api.prevention.getPoWStats();
         if (updated) setPowStats(updated);
+        await refreshBackendData();
       }
     } catch (err: any) {
       showToast('PoW Benchmark Error', err.message || 'Failed to execute hardware PoW test.', 'error');
@@ -219,7 +221,7 @@ export const ThreatPreventionPage: React.FC = () => {
     setIsSaving(true);
     try {
       const payload: PreventionPolicy = {
-        site_id: 'site_alvera_001',
+        site_id: 'site_elvara_001',
         block_threshold: blockThreshold,
         verify_threshold: verifyThreshold,
         auto_mitigation: true,
@@ -240,6 +242,8 @@ export const ThreatPreventionPage: React.FC = () => {
       };
 
       await api.prevention.updatePolicies(payload);
+      await api.prevention.updatePolicies({ ...payload, site_id: 'site_alvera_001' }).catch(() => {});
+      await Promise.all([loadPoliciesAndStats(), refreshBackendData()]);
 
       showToast(
         'Rules Deployed to Edge',
@@ -263,7 +267,7 @@ export const ThreatPreventionPage: React.FC = () => {
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#43D6A0]">
               Edge Policy Synchronizer Active
             </span>
-            <span className="text-[11px] font-mono text-slate-500">• site: site_alvera_001</span>
+            <span className="text-[11px] font-mono text-slate-500">• site: site_elvara_001</span>
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">
             Bot Regulation & Defense Policies
@@ -373,7 +377,11 @@ export const ThreatPreventionPage: React.FC = () => {
                   min={50}
                   max={95}
                   value={blockThreshold}
-                  onChange={(e) => setBlockThreshold(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setBlockThreshold(val);
+                    if (val <= verifyThreshold) setVerifyThreshold(Math.max(25, val - 5));
+                  }}
                   className="w-full accent-rose-500 cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] font-mono text-slate-500">
@@ -400,7 +408,11 @@ export const ThreatPreventionPage: React.FC = () => {
                   min={25}
                   max={75}
                   value={verifyThreshold}
-                  onChange={(e) => setVerifyThreshold(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setVerifyThreshold(val);
+                    if (val >= blockThreshold) setBlockThreshold(Math.min(95, val + 5));
+                  }}
                   className="w-full accent-cyan-400 cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] font-mono text-slate-500">

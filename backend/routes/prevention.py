@@ -20,8 +20,11 @@ async def receive_enforcement_feedback(payload: EnforcementFeedbackPayload):
     return result
 
 @router.get("/prevention/policies")
-def get_prevention_policies(site_id: str = "site_alvera_001"):
+def get_prevention_policies(site_id: str = "site_elvara_001"):
     policy = db.get_policy(site_id)
+    if not policy and site_id in ("site_elvara_001", "site_alvera_001"):
+        alt_id = "site_alvera_001" if site_id == "site_elvara_001" else "site_elvara_001"
+        policy = db.get_policy(alt_id)
     if not policy:
         default_policy = PreventionPolicy(site_id=site_id)
         return default_policy.dict()
@@ -34,13 +37,21 @@ def get_prevention_policies(site_id: str = "site_alvera_001"):
 @router.put("/prevention/policies")
 @router.post("/prevention/policies")
 def update_prevention_policies(payload: Dict[str, Any] = Body(...)):
-    site_id = payload.get("site_id", "site_alvera_001")
+    site_id = payload.get("site_id", "site_elvara_001")
     if "pow_difficulty" in payload and payload["pow_difficulty"] is not None:
         try:
             payload["pow_difficulty"] = validate_pow_difficulty(payload["pow_difficulty"], strict=True)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
     updated = db.save_policy(site_id, payload)
+    
+    # Keep aliases synchronized
+    alias_id = "site_alvera_001" if site_id == "site_elvara_001" else ("site_elvara_001" if site_id == "site_alvera_001" else None)
+    if alias_id:
+        alias_payload = dict(payload)
+        alias_payload["site_id"] = alias_id
+        db.save_policy(alias_id, alias_payload)
+
     return {
         "status": "success",
         "message": f"Bot regulation policies synchronized to edge for {site_id}",
@@ -48,7 +59,7 @@ def update_prevention_policies(payload: Dict[str, Any] = Body(...)):
     }
 
 @router.post("/prevention/pow/challenge")
-def request_pow_challenge(difficulty: Optional[int] = None, site_id: str = "site_alvera_001"):
+def request_pow_challenge(difficulty: Optional[int] = None, site_id: str = "site_elvara_001"):
     """
     Issues an HMAC-signed Cryptographic Proof-of-Work challenge to client browser.
     Uses saved site policy difficulty unless a valid difficulty (2-5) is explicitly specified.
@@ -71,7 +82,17 @@ def verify_pow_challenge(payload: Dict[str, Any] = Body(...)):
     return prevention_service.verify_pow_submission(payload)
 
 @router.get("/prevention/pow/stats")
-def get_pow_statistics(site_id: str = "site_alvera_001"):
+def get_pow_statistics(site_id: str = "site_elvara_001"):
+    """
+    Returns aggregated metrics on Proof-of-Work challenges solved by verified devices.
+    """
+    stats = db.get_pow_stats(site_id=site_id)
+    if (not stats or stats.get("total_solved", 0) == 0) and site_id in ("site_elvara_001", "site_alvera_001"):
+        alt_id = "site_alvera_001" if site_id == "site_elvara_001" else "site_elvara_001"
+        alt_stats = db.get_pow_stats(site_id=alt_id)
+        if alt_stats and alt_stats.get("total_solved", 0) > 0:
+            return alt_stats
+    return stats
     """
     Returns aggregated metrics on Proof-of-Work challenges solved by verified devices.
     """
