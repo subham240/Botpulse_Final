@@ -50,39 +50,15 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
-        serif: ['Newsreader', 'Georgia', 'serif'],
+        sans: ['"IBM Plex Sans"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace'],
       },
       boxShadow: {
-        'mint-sm': '0 0 15px rgba(67, 214, 160, 0.25)',
-        'mint-md': '0 0 25px rgba(67, 214, 160, 0.35)',
-        'mint-lg': '0 0 40px rgba(67, 214, 160, 0.5)',
-        'emerald-card': '0 10px 30px -10px rgba(0, 0, 0, 0.7), 0 0 20px rgba(19, 168, 121, 0.08)',
+        'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.4)',
+        'surface': '0 4px 20px -2px rgba(0, 0, 0, 0.5)',
       },
-      animation: {
-        'pulse-subtle': 'pulseSubtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'beacon': 'beaconPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'float-slow': 'floatSlow 6s ease-in-out infinite',
-        'float-reverse': 'floatReverse 7s ease-in-out infinite',
-      },
-      keyframes: {
-        pulseSubtle: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.6' },
-        },
-        beaconPulse: {
-          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
-          '50%': { opacity: '0.4', transform: 'scale(0.85)' },
-        },
-        floatSlow: {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(-8px)' },
-        },
-        floatReverse: {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(6px)' },
-        },
+      transitionTimingFunction: {
+        'craft': 'cubic-bezier(0.22, 1, 0.36, 1)',
       },
     },
   },
