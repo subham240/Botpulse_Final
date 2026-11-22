@@ -124,11 +124,13 @@ class PreventionService:
         When VERIFY is triggered, attaches a Cryptographic Proof-of-Work challenge
         using the site's configured difficulty policy.
         """
-        # Load active site regulation policy from database
-        policy = db.get_policy(site_id)
-        if not policy and site_id != settings.DEFAULT_SITE_ID:
-            policy = db.get_policy(settings.DEFAULT_SITE_ID)
-        policy = policy or {}
+        # Load active site regulation policy from database (check canonical ID and aliases)
+        canonical_site_id = self.resolve_canonical_site_id(site_id)
+        policy = db.get_policy(canonical_site_id)
+        if not policy and site_id != canonical_site_id:
+            policy = db.get_policy(site_id)
+        if not policy:
+            policy = db.get_policy("site_elvara_001") or db.get_policy("site_alvera_001") or {}
 
         decision_action = risk_result.get("decision", "allow").upper()
         risk_score = float(risk_result.get("risk_score", 0.0))
@@ -152,47 +154,93 @@ class PreventionService:
             if not any("IP_IN_BLOCKLIST" in r for r in reason_codes):
                 reason_codes.append(f"IP_IN_BLOCKLIST: {client_ip}")
 
-        # 2. Enforce Headless Browser Policy
-        elif policy.get("block_headless_browsers", True) and any("HEADLESS" in r for r in reason_codes):
-            logger.info("Session %s exhibits headless browser signature -> Enforcing BLOCK per policy.", session_id)
-            decision_action = "BLOCK"
-            risk_score = max(risk_score, 85.0)
-            risk_result["risk_score"] = risk_score
-            risk_result["risk_level"] = "critical"
-            risk_result["decision"] = "block"
-
-        # 3. Enforce Configurable Risk Thresholds and Category Overrides
+        # 2. Enforce Traffic Category Policy Overrides & Risk Thresholds
         else:
-            block_thresh = policy.get("block_threshold", 80)
-            verify_thresh = policy.get("verify_threshold", 60)
+            block_thresh = float(policy.get("block_threshold", 80))
+            verify_thresh = float(policy.get("verify_threshold", 60))
+            block_headless = policy.get("block_headless_browsers", True)
+            is_headless = any("HEADLESS" in r for r in reason_codes)
 
+            category_enforced = False
+
+            # Explicit Traffic Category Enforcement: AI Agents
             if visitor_category == "ai_agent":
                 custom_action = policy.get("ai_agent_action")
                 if custom_action:
-                    decision_action = custom_action.upper()
-                    if decision_action == "BLOCK":
-                        risk_score = max(risk_score, 85.0)
-                        risk_result["risk_score"] = risk_score
-                        risk_result["risk_level"] = "critical"
-                        risk_result["decision"] = "block"
-                        if not any("POLICY_BLOCK" in r for r in reason_codes):
-                            reason_codes.append("POLICY_ENFORCED_AI_AGENT_BLOCK")
+                    c_act = str(custom_action).strip().upper()
+                    if c_act in ("ALLOW", "VERIFY", "BLOCK", "RATE_LIMIT"):
+                        decision_action = c_act
+                        category_enforced = True
+                        if decision_action == "BLOCK":
+                            risk_score = max(risk_score, 85.0)
+                            if not any("POLICY_BLOCK" in r for r in reason_codes):
+                                reason_codes.append("POLICY_ENFORCED_AI_AGENT_BLOCK")
+                        elif decision_action == "VERIFY":
+                            risk_score = max(risk_score, verify_thresh)
+                            if not any("POLICY_VERIFY" in r for r in reason_codes):
+                                reason_codes.append("POLICY_ENFORCED_AI_AGENT_VERIFY")
+                        elif decision_action == "ALLOW":
+                            risk_score = min(risk_score, 20.0)
+                            if not any("POLICY_ALLOW" in r for r in reason_codes):
+                                reason_codes.append("POLICY_ENFORCED_AI_AGENT_ALLOW")
+
+            # Explicit Traffic Category Enforcement: Traditional Bots & Scrapers
             elif visitor_category in ("traditional_bot", "advanced_bot"):
                 custom_action = policy.get("traditional_bot_action")
                 if custom_action:
-                    decision_action = custom_action.upper()
-                    if decision_action == "BLOCK":
-                        risk_score = max(risk_score, 85.0)
-                        risk_result["risk_score"] = risk_score
-                        risk_result["risk_level"] = "critical"
-                        risk_result["decision"] = "block"
-            elif risk_score >= block_thresh:
-                high_action = policy.get("high_risk_action", "block")
-                decision_action = high_action.upper()
-            elif risk_score >= verify_thresh:
-                decision_action = "VERIFY"
-            elif visitor_category == "human" and risk_score < verify_thresh:
-                decision_action = "ALLOW"
+                    c_act = str(custom_action).strip().upper()
+                    if c_act == "LIMIT":
+                        c_act = "RATE_LIMIT"
+                    if c_act in ("ALLOW", "VERIFY", "BLOCK", "RATE_LIMIT"):
+                        decision_action = c_act
+                        category_enforced = True
+                        if decision_action == "BLOCK":
+                            risk_score = max(risk_score, 85.0)
+                            if not any("POLICY_BLOCK" in r for r in reason_codes):
+                                reason_codes.append("POLICY_ENFORCED_TRADITIONAL_BOT_BLOCK")
+                        elif decision_action == "VERIFY":
+                            # Enforce challenge: risk score must be at least verify_thresh so PoW is triggered
+                            risk_score = max(risk_score, verify_thresh)
+                            if not any("POLICY_VERIFY" in r for r in reason_codes):
+                                reason_codes.append("POLICY_ENFORCED_TRADITIONAL_BOT_VERIFY")
+                        elif decision_action == "ALLOW":
+                            risk_score = min(risk_score, 20.0)
+                            if not any("POLICY_ALLOW" in r for r in reason_codes):
+                                reason_codes.append("POLICY_ENFORCED_TRADITIONAL_BOT_ALLOW")
+                        elif decision_action == "RATE_LIMIT":
+                            if not any("POLICY_RATE_LIMIT" in r for r in reason_codes):
+                                reason_codes.append("POLICY_ENFORCED_TRADITIONAL_BOT_LIMIT")
+
+            # Autonomous Risk Scoring Thresholds & Headless Protection (when not overridden by category policy)
+            if not category_enforced:
+                if block_headless and is_headless:
+                    logger.info("Session %s exhibits headless browser signature -> Enforcing BLOCK per policy.", session_id)
+                    decision_action = "BLOCK"
+                    risk_score = max(risk_score, 85.0)
+                elif risk_score >= block_thresh:
+                    high_action = policy.get("high_risk_action", "block")
+                    decision_action = high_action.upper()
+                elif risk_score >= verify_thresh:
+                    decision_action = "VERIFY"
+                elif visitor_category == "human" and risk_score < verify_thresh:
+                    decision_action = "ALLOW"
+                elif risk_score < verify_thresh:
+                    decision_action = "ALLOW"
+
+            # Synchronize risk_result with final policy decision
+            risk_result["risk_score"] = risk_score
+            decision_lower = decision_action.lower()
+            risk_result["decision"] = decision_lower
+            if decision_action == "BLOCK":
+                risk_result["risk_level"] = "critical"
+            elif decision_action == "VERIFY":
+                risk_result["risk_level"] = "high" if risk_score >= 60.0 else "moderate"
+            elif decision_action in ("RATE_LIMIT", "LIMIT"):
+                decision_action = "RATE_LIMIT"
+                risk_result["decision"] = "rate_limit"
+                risk_result["risk_level"] = "high"
+            elif decision_action == "ALLOW":
+                risk_result["risk_level"] = "low"
 
         # If a VERIFY session already completed PoW recently, allow continued browsing
         # without falsely relabeling the visitor as human or overriding BLOCK/RATE_LIMIT.

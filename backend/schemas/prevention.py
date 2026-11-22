@@ -24,7 +24,7 @@ class PreventionPolicy(BaseModel):
     # Category Actions
     high_risk_action: str = "block"       # "block", "verify", "allow"
     ai_agent_action: str = "verify"       # "allow", "verify", "rate_limit", "block"
-    traditional_bot_action: str = "block" # "block", "rate_limit", "verify"
+    traditional_bot_action: str = "block" # "allow", "verify", "rate_limit", "block"
     verified_bot_action: str = "allow"    # "allow", "rate_limit" (Googlebot, Bingbot)
     
     # Rate Limiting & Traffic Regulation

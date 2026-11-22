@@ -93,10 +93,6 @@ def get_pow_statistics(site_id: str = "site_elvara_001"):
         if alt_stats and alt_stats.get("total_solved", 0) > 0:
             return alt_stats
     return stats
-    """
-    Returns aggregated metrics on Proof-of-Work challenges solved by verified devices.
-    """
-    return db.get_pow_stats(site_id=site_id)
 
 @router.get("/resemble/status")
 def get_resemble_status():

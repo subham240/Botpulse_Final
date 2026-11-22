@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { api } from '../../services/api';
 import {
@@ -63,6 +63,8 @@ export const ThreatPreventionPage: React.FC = () => {
   // UI state
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const isLoadedRef = useRef(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load live policies and stats from backend
   const loadPoliciesAndStats = useCallback(async () => {
@@ -88,6 +90,7 @@ export const ThreatPreventionPage: React.FC = () => {
       if (powRes.status === 'fulfilled' && powRes.value && typeof powRes.value.total_solved === 'number') {
         setPowStats(powRes.value);
       }
+      isLoadedRef.current = true;
     } catch (err) {
       console.warn('Could not load remote policy, using defaults:', err);
     }
@@ -114,6 +117,60 @@ export const ThreatPreventionPage: React.FC = () => {
     }, 4000);
     return () => clearInterval(interval);
   }, [isStreaming]);
+
+  // Core function to deploy and persist policies to backend edge
+  const savePoliciesToEdge = useCallback(async (overrides?: Partial<PreventionPolicy>, showSuccessToast = false) => {
+    setIsSaving(true);
+    try {
+      const payload: PreventionPolicy = {
+        site_id: 'site_elvara_001',
+        block_threshold: overrides?.block_threshold ?? blockThreshold,
+        verify_threshold: overrides?.verify_threshold ?? verifyThreshold,
+        auto_mitigation: true,
+        high_risk_action: 'block',
+        ai_agent_action: overrides?.ai_agent_action ?? aiAgentAction,
+        traditional_bot_action: overrides?.traditional_bot_action ?? traditionalBotAction,
+        verified_bot_action: 'allow',
+        rate_limit_rpm: 60,
+        burst_allowance: 15,
+        rate_limit_action: 'throttle',
+        pow_difficulty: overrides?.pow_difficulty ?? powDifficulty,
+        lstm_kinematic_sensitivity: 'standard',
+        block_headless_browsers: overrides?.block_headless_browsers ?? blockHeadlessBrowsers,
+        block_known_scrapers: true,
+        block_data_centers: false,
+        rapid_scan_protection: true,
+        block_list: overrides?.block_list ?? blockList,
+      };
+
+      await api.prevention.updatePolicies(payload);
+      await api.prevention.updatePolicies({ ...payload, site_id: 'site_alvera_001' }).catch(() => {});
+      await refreshBackendData();
+
+      if (showSuccessToast) {
+        showToast(
+          'Rules Deployed to Edge',
+          `Synchronized: Traditional -> ${(payload.traditional_bot_action || 'BLOCK').toUpperCase()}, Block > ${payload.block_threshold}%, Verify > ${payload.verify_threshold}%, PoW Lvl ${payload.pow_difficulty}.`,
+          'success'
+        );
+      }
+    } catch (err: any) {
+      if (showSuccessToast) {
+        showToast('Deployment Notice', 'Rules saved locally. Edge synchronizing in background.', 'info');
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }, [blockThreshold, verifyThreshold, aiAgentAction, traditionalBotAction, powDifficulty, blockHeadlessBrowsers, blockList, refreshBackendData, showToast]);
+
+  // Auto-sync debounced trigger for immediate live effect
+  const triggerAutoSave = (overrides?: Partial<PreventionPolicy>) => {
+    if (!isLoadedRef.current) return;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      savePoliciesToEdge(overrides, false);
+    }, 350);
+  };
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -206,55 +263,23 @@ export const ThreatPreventionPage: React.FC = () => {
       showToast('Duplicate Rule', `${clean} is already in the blocklist.`, 'warning');
       return;
     }
-    setBlockList((prev) => [clean, ...prev]);
+    const updated = [clean, ...blockList];
+    setBlockList(updated);
     setNewRule('');
-    showToast('Rule Staged', `Added ${clean}. Click 'Deploy Rules to Edge' to enforce.`, 'info');
+    triggerAutoSave({ block_list: updated });
+    showToast('Rule Added', `Added ${clean} and deployed to edge blocklist.`, 'success');
   };
 
   const handleRemoveBlock = (item: string) => {
-    setBlockList((prev) => prev.filter((r) => r !== item));
-    showToast('Rule Removed', `Removed ${item}. Deploy to edge to synchronize.`, 'info');
+    const updated = blockList.filter((r) => r !== item);
+    setBlockList(updated);
+    triggerAutoSave({ block_list: updated });
+    showToast('Rule Removed', `Removed ${item} from edge blocklist.`, 'info');
   };
 
   // Deploy all active regulation policies to backend edge
-  const handleDeployRules = async () => {
-    setIsSaving(true);
-    try {
-      const payload: PreventionPolicy = {
-        site_id: 'site_elvara_001',
-        block_threshold: blockThreshold,
-        verify_threshold: verifyThreshold,
-        auto_mitigation: true,
-        high_risk_action: 'block',
-        ai_agent_action: aiAgentAction,
-        traditional_bot_action: traditionalBotAction,
-        verified_bot_action: 'allow',
-        rate_limit_rpm: 60,
-        burst_allowance: 15,
-        rate_limit_action: 'throttle',
-        pow_difficulty: powDifficulty,
-        lstm_kinematic_sensitivity: 'standard',
-        block_headless_browsers: blockHeadlessBrowsers,
-        block_known_scrapers: true,
-        block_data_centers: false,
-        rapid_scan_protection: true,
-        block_list: blockList,
-      };
-
-      await api.prevention.updatePolicies(payload);
-      await api.prevention.updatePolicies({ ...payload, site_id: 'site_alvera_001' }).catch(() => {});
-      await Promise.all([loadPoliciesAndStats(), refreshBackendData()]);
-
-      showToast(
-        'Rules Deployed to Edge',
-        `Synchronized: Block > ${blockThreshold}%, Verify > ${verifyThreshold}%, PoW Lvl ${powDifficulty}, ${blockList.length} IP rules.`,
-        'success'
-      );
-    } catch (err: any) {
-      showToast('Deployment Notice', 'Rules saved locally. Edge synchronizing in background.', 'info');
-    } finally {
-      setIsSaving(false);
-    }
+  const handleDeployRules = () => {
+    savePoliciesToEdge(undefined, true);
   };
 
   return (
@@ -263,9 +288,9 @@ export const ThreatPreventionPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-[#101512] border border-white/10 shadow-lg">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="w-2 h-2 rounded-full bg-[#43D6A0] animate-pulse" />
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#43D6A0]">
-              Edge Policy Synchronizer Active
+            <span className={`w-2 h-2 rounded-full ${isSaving ? 'bg-amber-400 animate-ping' : 'bg-[#43D6A0] animate-pulse'}`} />
+            <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${isSaving ? 'text-amber-300' : 'text-[#43D6A0]'}`}>
+              {isSaving ? 'Synchronizing to Edge...' : 'Edge Policy Synchronizer Active'}
             </span>
             <span className="text-[11px] font-mono text-slate-500">• site: site_elvara_001</span>
           </div>
@@ -380,7 +405,9 @@ export const ThreatPreventionPage: React.FC = () => {
                   onChange={(e) => {
                     const val = Number(e.target.value);
                     setBlockThreshold(val);
-                    if (val <= verifyThreshold) setVerifyThreshold(Math.max(25, val - 5));
+                    const newVerify = val <= verifyThreshold ? Math.max(25, val - 5) : verifyThreshold;
+                    if (val <= verifyThreshold) setVerifyThreshold(newVerify);
+                    triggerAutoSave({ block_threshold: val, verify_threshold: newVerify });
                   }}
                   className="w-full accent-rose-500 cursor-pointer"
                 />
@@ -411,7 +438,9 @@ export const ThreatPreventionPage: React.FC = () => {
                   onChange={(e) => {
                     const val = Number(e.target.value);
                     setVerifyThreshold(val);
-                    if (val >= blockThreshold) setBlockThreshold(Math.min(95, val + 5));
+                    const newBlock = val >= blockThreshold ? Math.min(95, val + 5) : blockThreshold;
+                    if (val >= blockThreshold) setBlockThreshold(newBlock);
+                    triggerAutoSave({ verify_threshold: val, block_threshold: newBlock });
                   }}
                   className="w-full accent-cyan-400 cursor-pointer"
                 />
@@ -435,7 +464,10 @@ export const ThreatPreventionPage: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={blockHeadlessBrowsers}
-                  onChange={(e) => setBlockHeadlessBrowsers(e.target.checked)}
+                  onChange={(e) => {
+                    setBlockHeadlessBrowsers(e.target.checked);
+                    triggerAutoSave({ block_headless_browsers: e.target.checked });
+                  }}
                   className="w-4 h-4 rounded bg-surface-1 border-white/20 text-[#43D6A0] focus:ring-0 cursor-pointer ml-3"
                 />
               </label>
@@ -461,14 +493,23 @@ export const ThreatPreventionPage: React.FC = () => {
                   <span className="text-xs font-mono font-bold text-slate-200">Traditional Bots & Scrapers</span>
                   <span className="text-[10px] font-mono text-slate-500">Stage 1 XGBoost</span>
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 text-xs font-mono">
-                  {(['block', 'verify', 'rate_limit'] as EnforcementDecision[]).map((act) => (
+                <div className="grid grid-cols-4 gap-1.5 text-xs font-mono">
+                  {(['block', 'verify', 'rate_limit', 'allow'] as EnforcementDecision[]).map((act) => (
                     <button
                       key={act}
-                      onClick={() => setTraditionalBotAction(act)}
+                      onClick={() => {
+                        setTraditionalBotAction(act);
+                        triggerAutoSave({ traditional_bot_action: act });
+                      }}
                       className={`py-1.5 px-1 rounded-lg text-center uppercase tracking-wider font-bold transition-all ${
                         traditionalBotAction === act
-                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                          ? act === 'block'
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                            : act === 'verify'
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                            : act === 'rate_limit'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
                           : 'bg-surface-2 text-slate-400 border border-white/5 hover:text-white'
                       }`}
                     >
@@ -477,7 +518,7 @@ export const ThreatPreventionPage: React.FC = () => {
                   ))}
                 </div>
                 <p className="text-[10px] text-slate-500 font-mono">
-                  Enforces {traditionalBotAction.toUpperCase()} on detected automated bots.
+                  Enforces {traditionalBotAction === 'rate_limit' ? 'LIMIT' : traditionalBotAction.toUpperCase()} on detected automated bots.
                 </p>
               </div>
 
@@ -487,23 +528,32 @@ export const ThreatPreventionPage: React.FC = () => {
                   <span className="text-xs font-mono font-bold text-slate-200">Autonomous AI Agents</span>
                   <span className="text-[10px] font-mono text-purple-400">Stage 3 RAD-S1</span>
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 text-xs font-mono">
-                  {(['verify', 'allow', 'block'] as EnforcementDecision[]).map((act) => (
+                <div className="grid grid-cols-4 gap-1.5 text-xs font-mono">
+                  {(['verify', 'allow', 'rate_limit', 'block'] as EnforcementDecision[]).map((act) => (
                     <button
                       key={act}
-                      onClick={() => setAiAgentAction(act)}
+                      onClick={() => {
+                        setAiAgentAction(act);
+                        triggerAutoSave({ ai_agent_action: act });
+                      }}
                       className={`py-1.5 px-1 rounded-lg text-center uppercase tracking-wider font-bold transition-all ${
                         aiAgentAction === act
-                          ? 'bg-[#43D6A0]/20 text-[#43D6A0] border border-[#43D6A0]/40 shadow-sm'
+                          ? act === 'block'
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                            : act === 'verify'
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                            : act === 'rate_limit'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
                           : 'bg-surface-2 text-slate-400 border border-white/5 hover:text-white'
                       }`}
                     >
-                      {act}
+                      {act === 'rate_limit' ? 'Limit' : act}
                     </button>
                   ))}
                 </div>
                 <p className="text-[10px] text-slate-500 font-mono">
-                  Enforces {aiAgentAction.toUpperCase()} on Gemini, Claude, and LLM crawlers.
+                  Enforces {aiAgentAction === 'rate_limit' ? 'LIMIT' : aiAgentAction.toUpperCase()} on Gemini, Claude, and LLM crawlers.
                 </p>
               </div>
             </div>
@@ -549,7 +599,10 @@ export const ThreatPreventionPage: React.FC = () => {
                 ].map((d) => (
                   <button
                     key={d.level}
-                    onClick={() => setPowDifficulty(d.level)}
+                    onClick={() => {
+                      setPowDifficulty(d.level);
+                      triggerAutoSave({ pow_difficulty: d.level });
+                    }}
                     className={`p-2.5 rounded-xl border text-left transition-all ${
                       powDifficulty === d.level
                         ? 'bg-[#43D6A0]/20 border-[#43D6A0] text-white shadow-sm'

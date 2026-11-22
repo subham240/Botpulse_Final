@@ -1334,6 +1334,20 @@ class DatabaseManager:
                     return pol
             except Exception as e:
                 logger.warning("Could not query policy table: %s", e)
+
+        # Check alias if primary site_id has no record
+        alias_id = "site_alvera_001" if site_id == "site_elvara_001" else ("site_elvara_001" if site_id == "site_alvera_001" else None)
+        if alias_id and alias_id in self._policy_cache:
+            return self._policy_cache[alias_id]
+        if alias_id and not self.is_mongodb:
+            try:
+                row = self._query_one("SELECT data FROM policies WHERE site_id = ?", (alias_id,))
+                if row and row.get("data"):
+                    pol = json.loads(row["data"])
+                    self._policy_cache[alias_id] = pol
+                    return pol
+            except Exception:
+                pass
         return None
 
     def save_policy(self, site_id: str, policy_data: Dict[str, Any]) -> Dict[str, Any]:
