@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Cpu, ShieldCheck, Activity, Bot, Zap, ArrowRight, CheckCircle2, Lock, Eye, Layers } from 'lucide-react';
 
 interface StageNode {
   id: string;
@@ -16,16 +17,16 @@ const PIPELINE_STAGES: StageNode[] = [
   {
     id: 'ingress',
     number: '01',
-    title: 'Telemetry ingress',
-    subtitle: 'Client event collection',
+    title: 'Telemetry Ingress',
+    subtitle: 'Non-invasive biometric collection',
     status: 'active',
-    latency: '< 1.2 ms',
-    badge: 'Beacon ingestion',
-    description: 'Collects cursor acceleration, angular curvature, micro-tremors, and DOM interaction timings asynchronously from the client.',
+    latency: '< 1.2ms',
+    badge: 'Beacon Ingestion',
+    description: 'Captures mouse cursor acceleration, angular curvature, micro-tremors, and DOM interaction cadences directly in the browser.',
     metrics: [
-      { label: 'Feature dimensions', value: '27 kinematic metrics' },
-      { label: 'Sampling throttle', value: '45 ms interval' },
-      { label: 'Client script size', value: '9.4 KB gzipped' }
+      { label: 'Feature Dimensions', value: '27 Common' },
+      { label: 'Sampling Jitter', value: '45ms throttled' },
+      { label: 'Client Overhead', value: '< 12 KB async' }
     ]
   },
   {
@@ -34,58 +35,58 @@ const PIPELINE_STAGES: StageNode[] = [
     title: 'Layer 1: XGBoost',
     subtitle: 'Tabular feature screening',
     status: 'screening',
-    latency: '1.8 ms',
-    badge: 'Base classifier',
-    description: 'Preprocessed through StandardScaler and evaluated across gradient-boosted trees. Identifies automated scripts and headless browsers in sub-2ms.',
+    latency: '1.8ms',
+    badge: 'Base Classifier',
+    description: 'Preprocessed through StandardScaler and evaluated across gradient-boosted decision trees. Isolates obvious automation and headless scripts.',
     metrics: [
-      { label: 'Model format', value: 'xgboost.joblib' },
-      { label: 'Inference model', value: 'Binary tabular' },
-      { label: 'Decision threshold', value: 'P(bot) > 0.75' }
+      { label: 'Model Artifact', value: 'xgboost.joblib' },
+      { label: 'Inference Type', value: 'Tabular Binary' },
+      { label: 'Threshold Gate', value: 'Prob > 0.75' }
     ]
   },
   {
     id: 'lstm',
     number: '03',
-    title: 'Layer 2: Bi-LSTM',
+    title: 'Layer 2: LSTM Sequencer',
     subtitle: 'Sequential trajectory analysis',
     status: 'screening',
-    latency: '4.5 ms',
-    badge: 'Deep kinematics',
-    description: 'Evaluates interaction sequences over a sliding window. Detects synthetic linear paths, robotic pauses, and missing physiological hesitation.',
+    latency: '4.5ms',
+    badge: 'Deep Kinematics',
+    description: 'Enforces sliding-window evaluation over temporal interactions. Analyzes velocity entropy, angular variance, and synthetic straight-line motion.',
     metrics: [
-      { label: 'Sequence length', value: '8–60 events' },
-      { label: 'Window size', value: '1.5 s interaction' },
-      { label: 'Evaluation', value: 'Kinematic entropy' }
+      { label: 'Min Sequence', value: '8 events' },
+      { label: 'Max Window', value: '60 events' },
+      { label: 'Analysis Mode', value: 'Kinematic Physics' }
     ]
   },
   {
     id: 'rad_s1',
     number: '04',
     title: 'Layer 3: RAD-S1',
-    subtitle: 'Agent attribution engine',
+    subtitle: 'AI-agent attribution engine',
     status: 'ready',
-    latency: '3.2 ms',
-    badge: 'Agent fingerprinting',
-    description: 'Identifies autonomous web agents (Claude, Perplexity, GPTBot) by analyzing goal-directed navigation trees and TLS client hello fingerprints.',
+    latency: '3.2ms',
+    badge: 'Agent Fingerprinting',
+    description: 'Identifies autonomous web agents (Claude, Perplexity, GPTBot) via goal-directed direct traversals, zero reading dwell, and signature validation.',
     metrics: [
-      { label: 'Detection logic', value: 'Multi-factor TLS & DOM' },
-      { label: 'Attribution', value: 'Known crawler index' },
-      { label: 'Header verification', value: 'FCrDNS + ASN check' }
+      { label: 'Detection Logic', value: 'Multi-factor' },
+      { label: 'Attribution', value: 'Declared & Heuristic' },
+      { label: 'Token Protocol', value: 'Resemble AI' }
     ]
   },
   {
     id: 'risk_engine',
     number: '05',
-    title: 'Risk engine',
-    subtitle: 'Cryptographic decision token',
+    title: 'Risk Engine & Token',
+    subtitle: 'Cryptographic policy enforcement',
     status: 'ready',
-    latency: '< 0.8 ms',
-    badge: 'Policy enforcement',
-    description: 'Combines layer probabilities into a 0–100 risk score and issues a signed HMAC-SHA256 verdict token (allow, challenge, block).',
+    latency: '< 0.8ms',
+    badge: 'Decision Token',
+    description: 'Synthesizes all layer probabilities into a unified 0–100 risk score and issues signed HMAC-SHA256 decision tokens (ALLOW, VERIFY, BLOCK).',
     metrics: [
-      { label: 'Token format', value: 'HMAC-SHA256' },
-      { label: 'Action tiers', value: 'Allow / Challenge / Drop' },
-      { label: 'Edge overhead', value: '< 1 ms' }
+      { label: 'Token Sig', value: 'HMAC-SHA256' },
+      { label: 'Action Tiers', value: 'ALLOW/VERIFY/BLOCK' },
+      { label: 'Client Overhead', value: 'Zero latency' }
     ]
   }
 ];
@@ -96,52 +97,90 @@ export const NeuralPipelineVisualization: React.FC = () => {
   const selected = PIPELINE_STAGES.find((s) => s.id === activeStage) || PIPELINE_STAGES[1];
 
   return (
-    <div className="w-full bg-[#101512] border border-white/[0.08] rounded-2xl p-6 lg:p-8">
+    <div className="w-full bg-[#121A16]/90 border border-white/10 rounded-[28px] p-6 lg:p-10 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+      {/* Soft emerald radial aura behind pipeline */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-[#13A879]/10 blur-[130px] pointer-events-none rounded-full" />
+
       {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/[0.08]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 pb-6 border-b border-white/[0.08] relative z-10">
         <div>
-          <h3 className="text-xl sm:text-2xl font-normal text-[#F5F7F5] tracking-tight">
-            Three-layer detection architecture
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#43D6A0]/10 border border-[#43D6A0]/20 text-[11px] font-mono text-[#43D6A0] mb-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#43D6A0] animate-pulse" />
+            <span>Interactive Architecture Topology</span>
+          </div>
+          <h3 className="text-2xl sm:text-3xl font-bold text-[#F5F7F5] tracking-tight">
+            Three-Layer AI Detection Pipeline
           </h3>
-          <p className="text-sm text-[#A3ADA6] mt-1 font-normal">
-            How biometrics pass through XGBoost tabular screening, sequential kinematics, and agent attribution.
+          <p className="text-xs sm:text-sm text-[#A3ADA6] mt-1">
+            Explore how biometrics pass through XGBoost, sequential kinematics, and RAD-S1 AI-agent attribution.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto bg-[#141C18] px-3 py-1.5 rounded-lg border border-white/[0.08] text-xs font-mono text-[#A3ADA6]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#43D6A0]" />
-          <span>Cumulative latency: &lt; 10 ms</span>
+        <div className="flex items-center gap-2 self-start sm:self-auto bg-[#18221D] px-3.5 py-1.5 rounded-full border border-white/10 text-xs font-mono text-[#A3ADA6]">
+          <span className="text-[#43D6A0]">●</span>
+          <span>Cumulative Latency: &lt; 10ms</span>
         </div>
       </div>
 
-      {/* Pipeline Nodes Row */}
-      <div className="relative mb-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* Animated Pipeline Nodes Row */}
+      <div className="relative mb-12">
+        {/* Animated Connecting SVG Wire with Light Pulses */}
+        <div className="hidden lg:block absolute top-1/2 left-8 right-8 -translate-y-1/2 h-1 z-0 pointer-events-none">
+          <svg className="w-full h-12 overflow-visible" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="wireGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#43D6A0" stopOpacity="0.8" />
+                <stop offset="50%" stopColor="#13A879" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#43D6A0" stopOpacity="0.8" />
+              </linearGradient>
+            </defs>
+            {/* Background line */}
+            <line x1="0" y1="6" x2="100%" y2="6" stroke="rgba(255,255,255,0.08)" strokeWidth="2" strokeDasharray="4 4" />
+            {/* Glowing active animated line */}
+            <line
+              x1="0"
+              y1="6"
+              x2="100%"
+              y2="6"
+              stroke="url(#wireGradient)"
+              strokeWidth="2.5"
+              className="opacity-70"
+            />
+          </svg>
+        </div>
+
+        {/* 5 Pipeline Stage Pills */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 relative z-10">
           {PIPELINE_STAGES.map((stage) => {
             const isSelected = stage.id === activeStage;
             return (
               <button
                 key={stage.id}
                 onClick={() => setActiveStage(stage.id)}
-                className={`p-3.5 rounded-xl text-left transition-colors duration-150 border ${
+                className={`p-4 rounded-2xl text-left transition-all duration-300 relative border ${
                   isSelected
-                    ? 'bg-[#18221D] border-white/20 text-[#F5F7F5]'
-                    : 'bg-[#141C18]/60 border-white/[0.06] text-[#A3ADA6] hover:bg-[#18221D]/60 hover:text-[#F5F7F5]'
+                    ? 'bg-[#18221D] border-[#43D6A0] shadow-[0_0_25px_rgba(67,214,160,0.25)] scale-[1.02]'
+                    : 'bg-[#101512]/80 border-white/10 hover:border-white/20 hover:bg-[#141C18]'
                 }`}
               >
+                {/* Active marker dot */}
+                {isSelected && (
+                  <span className="absolute -top-1.5 right-4 w-3 h-3 bg-[#43D6A0] rounded-full shadow-[0_0_8px_#43D6A0] animate-ping" />
+                )}
+
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono text-xs text-[#43D6A0]">
+                  <span className="font-mono text-xs font-semibold text-[#43D6A0]">
                     {stage.number}
                   </span>
-                  <span className="text-[11px] font-mono text-[#737F77]">
+                  <span className="text-[10px] font-mono text-[#A3ADA6] bg-[#080B09] px-2 py-0.5 rounded-full border border-white/5">
                     {stage.latency}
                   </span>
                 </div>
 
-                <div className="text-sm font-medium text-[#F5F7F5] truncate mb-0.5">
+                <div className="text-sm font-bold text-[#F5F7F5] truncate mb-0.5">
                   {stage.title}
                 </div>
-                <div className="text-xs text-[#737F77] truncate">
+                <div className="text-[11px] text-[#A3ADA6] truncate">
                   {stage.badge}
                 </div>
               </button>
@@ -151,21 +190,21 @@ export const NeuralPipelineVisualization: React.FC = () => {
       </div>
 
       {/* Selected Stage Detail Panel */}
-      <div className="bg-[#141C18] border border-white/[0.08] rounded-xl p-5 sm:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="bg-[#101512] border border-white/10 rounded-2xl p-6 sm:p-8 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           
           {/* Left: Stage Overview */}
           <div className="lg:col-span-7">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-xs font-mono text-[#43D6A0] bg-[#43D6A0]/10 border border-[#43D6A0]/20 px-2 py-0.5 rounded-md">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-xs font-mono uppercase tracking-widest text-[#43D6A0] bg-[#43D6A0]/10 border border-[#43D6A0]/20 px-2.5 py-0.5 rounded-md">
                 {selected.badge}
               </span>
               <span className="text-xs font-mono text-[#737F77]">
-                Latency: <span className="text-[#F5F7F5]">{selected.latency}</span>
+                Latency Budget: <strong className="text-[#F5F7F5]">{selected.latency}</strong>
               </span>
             </div>
 
-            <h4 className="text-lg font-medium text-[#F5F7F5] tracking-tight mb-2">
+            <h4 className="text-xl sm:text-2xl font-bold text-[#F5F7F5] tracking-tight mb-3">
               {selected.title} — {selected.subtitle}
             </h4>
 
@@ -173,14 +212,14 @@ export const NeuralPipelineVisualization: React.FC = () => {
               {selected.description}
             </p>
 
-            {/* Metric tags */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {/* Metric pill tags */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {selected.metrics.map((m) => (
-                <div key={m.label} className="bg-[#18221D] p-3 rounded-lg border border-white/[0.06]">
-                  <span className="block text-[11px] font-mono text-[#737F77] mb-1">
+                <div key={m.label} className="bg-[#18221D] p-3 rounded-xl border border-white/5">
+                  <span className="block text-[10px] uppercase font-mono text-[#737F77] mb-1">
                     {m.label}
                   </span>
-                  <span className="block text-xs font-medium font-mono text-[#F5F7F5]">
+                  <span className="block text-xs sm:text-sm font-semibold font-mono text-[#43D6A0]">
                     {m.value}
                   </span>
                 </div>
@@ -188,42 +227,44 @@ export const NeuralPipelineVisualization: React.FC = () => {
             </div>
           </div>
 
-          {/* Right: Stage Execution Inspector */}
-          <div className="lg:col-span-5 bg-[#080B09] border border-white/[0.08] rounded-lg p-4 font-mono text-xs">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/[0.08] text-[#737F77] text-xs">
-              <span>Stage telemetry</span>
-              <span className="text-[#43D6A0] flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#43D6A0]" />
-                Synchronized
-              </span>
+          {/* Right: Stage Execution Diagram Card */}
+          <div className="lg:col-span-5 bg-[#080B09] border border-white/10 rounded-xl p-5 font-mono text-xs shadow-inner">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10 text-[#737F77] text-[11px]">
+              <span>STAGE TELEMETRY INSPECTOR</span>
+              <span className="text-[#43D6A0]">● SYNCHRONIZED</span>
             </div>
 
-            <div className="space-y-2 text-xs text-[#A3ADA6]">
+            <div className="space-y-2 text-[#A3ADA6]">
               <div className="flex justify-between">
-                <span>Execution state:</span>
-                <span className="text-[#F5F7F5]">Active</span>
+                <span>Execution State:</span>
+                <span className="text-[#F5F7F5] font-semibold">STAGE_ACTIVE</span>
               </div>
               <div className="flex justify-between">
-                <span>Feature vector:</span>
-                <span className="text-[#F5F7F5]">27 dimensions</span>
+                <span>Feature Schema:</span>
+                <span className="text-[#F5F7F5]">27-dim StandardScaler</span>
               </div>
               <div className="flex justify-between">
-                <span>Verification scope:</span>
-                <span className="text-[#43D6A0]">['/checkout', '/login']</span>
+                <span>Verification Scope:</span>
+                <span className="text-[#43D6A0]">['checkout', 'cart', 'auth']</span>
               </div>
               <div className="flex justify-between">
-                <span>Cryptographic digest:</span>
+                <span>Cryptographic Digest:</span>
                 <span className="text-[#737F77] truncate max-w-[140px]">sha256:7c4f19e...</span>
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-[#737F77]">
-              <span>Fail-safe policy:</span>
-              <span className="text-[#F5F7F5]">Fail-open with telemetry logging</span>
+            <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-[#737F77]">
+              <span>Fail-Safe Policy:</span>
+              <span className="text-[#43D6A0]">Fail-Open with Auditing</span>
             </div>
           </div>
 
         </div>
+      </div>
+
+      {/* Visual Disclaimer */}
+      <div className="mt-4 text-center text-[11px] text-[#737F77] font-mono">
+        Topology representation reflects multi-layer architectural routing. Actual execution timing depends on client connection latency.
       </div>
     </div>
   );
