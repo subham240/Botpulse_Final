@@ -104,10 +104,6 @@ export const NeuralPipelineVisualization: React.FC = () => {
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 pb-6 border-b border-white/[0.08] relative z-10">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#43D6A0]/10 border border-[#43D6A0]/20 text-[11px] font-mono text-[#43D6A0] mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#43D6A0] animate-pulse" />
-            <span>Interactive Architecture Topology</span>
-          </div>
           <h3 className="text-2xl sm:text-3xl font-bold text-[#F5F7F5] tracking-tight">
             Three-Layer AI Detection Pipeline
           </h3>
@@ -116,7 +112,7 @@ export const NeuralPipelineVisualization: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto bg-[#18221D] px-3.5 py-1.5 rounded-full border border-white/10 text-xs font-mono text-[#A3ADA6]">
+        <div className="flex items-center gap-2 self-start sm:self-auto text-xs font-mono text-[#A3ADA6]">
           <span className="text-[#43D6A0]">●</span>
           <span>Cumulative Latency: &lt; 10ms</span>
         </div>

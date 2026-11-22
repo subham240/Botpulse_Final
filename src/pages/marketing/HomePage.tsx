@@ -51,12 +51,6 @@ export const HomePage: React.FC = () => {
             
             {/* LEFT COLUMN: HERO CONTENT */}
             <div className="lg:col-span-6 flex flex-col items-start text-left">
-              {/* Small pill tag matching screenshot */}
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 bg-[#121A16]/80 text-xs font-medium text-[#A3ADA6] mb-8 backdrop-blur-md shadow-sm">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#43D6A0] animate-pulse" />
-                <span className="tracking-wide font-mono">AI TRAFFIC INTELLIGENCE</span>
-              </div>
-
               {/* Headline with editorial italic serif accent */}
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[68px] font-bold text-[#F5F7F5] tracking-tight leading-[1.08] mb-6">
                 Manage your<br />

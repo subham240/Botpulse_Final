@@ -59,10 +59,6 @@ export const PricingPage: React.FC = () => {
     <div className="w-full py-16 lg:py-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-1 border border-white/10 text-slate-300 text-xs font-mono mb-4">
-            <HelpCircle className="w-3.5 h-3.5 text-pulse-cyan" />
-            <span>Illustrative Demonstration Pricing Model</span>
-          </div>
           <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">
             Transparent, Predictable Protection
           </h1>
